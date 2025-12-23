@@ -10,32 +10,52 @@ export enum AspectRatio {
   SQUARE = '1080x1080'
 }
 
+export enum Alignment {
+  LEFT = 'left',
+  CENTER = 'center',
+  JUSTIFY = 'justify'
+}
+
 export enum NickPosition {
   BOTTOM_LEFT = 'BOTTOM_LEFT',
   BOTTOM_RIGHT = 'BOTTOM_RIGHT',
-  TOP_RIGHT = 'TOP_RIGHT'
+  TOP_RIGHT = 'TOP_RIGHT',
+  TOP_CENTER = 'TOP_CENTER',
+  TOP_LEFT = 'TOP_LEFT'
+}
+
+export enum TemplateId {
+  COLOR = 'COLOR',
+  IMAGE = 'IMAGE',
+  GRADIENT = 'GRADIENT',
+  MINIMAL = 'MINIMAL'
 }
 
 export interface SlideData {
   id: number;
   text: string;
-  isOverflowing?: boolean;
-}
-
-export enum TemplateId {
-  WHITE_MINIMAL = 'WHITE_MINIMAL',
-  BLACK_MINIMAL = 'BLACK_MINIMAL',
-  PASTEL = 'PASTEL',
-  GRADIENT = 'GRADIENT',
-  NOTES = 'NOTES',
-  CARD = 'CARD'
 }
 
 export interface DesignConfig {
   templateId: TemplateId;
-  aspectRatio: AspectRatio;
+  customColor: string;
+  bgImageUrl: string | null;
+  alignment: Alignment;
+  fontPair: {
+    header: string;
+    body: string;
+    isCustom?: boolean;
+  };
   nickname: string;
   avatarUrl: string | null;
   nickPosition: NickPosition;
-  showPageNumber: boolean;
+  numbering: {
+    enabled: boolean;
+    position: 'top-right' | 'bottom-right';
+  };
+  sizes: {
+    first: AspectRatio;
+    middle: AspectRatio;
+    last: AspectRatio;
+  };
 }

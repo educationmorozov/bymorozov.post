@@ -1,5 +1,5 @@
 
-import { SlideData, DesignConfig, TemplateId, NickPosition, AspectRatio } from '../types';
+import { SlideData, DesignConfig, AspectRatio, Alignment, NickPosition } from '../types.ts';
 
 export const saveBlob = (blob: Blob, fileName: string) => {
   const url = URL.createObjectURL(blob);
@@ -24,225 +24,164 @@ export const renderSlideToCanvas = async (
   const width = canvas.width;
   const height = canvas.height;
 
-  // Clear Canvas
-  ctx.clearRect(0, 0, width, height);
-
   // 1. Background
-  applyBackground(ctx, width, height, config.templateId);
+  await applyBackground(ctx, width, height, config);
 
-  // 2. Draw Text (Main logic)
+  // 2. Main Content
   const margin = 100;
   const availableWidth = width - margin * 2;
-  const availableHeight = height - margin * 3; // Extra margin for footer
+  const availableHeight = height - margin * 4;
 
-  const lines = slide.text.split('\n');
-  const hasTitle = lines.length > 1 && lines[0].length < 40;
-  
-  let fontSize = config.aspectRatio === AspectRatio.PORTRAIT ? 64 : 56;
-  const minFontSize = config.aspectRatio === AspectRatio.PORTRAIT ? 36 : 30;
+  let fontSize = width / 18;
+  const minFontSize = 32;
   let success = false;
 
-  while (fontSize >= minFontSize) {
-    ctx.font = `${fontSize}px 'Inter', sans-serif`;
-    const textHeight = wrapText(ctx, slide.text, margin, height * 0.3, availableWidth, fontSize * 1.4, availableHeight, true);
+  // Rich Text Parsing Logic
+  const parseRichText = (text: string) => {
+    const parts: { text: string; bold: boolean; color: string | null }[] = [];
+    let current = text;
     
-    if (textHeight <= availableHeight) {
+    // Simple regex-based parsing for MVP
+    // Bold: *text* -> (color)text(color)
+    const regex = /(\*[^*]+\*|\([^)]+\)[^()]+\([^)]+\))/g;
+    let lastIndex = 0;
+    let match;
+    
+    while ((match = regex.exec(current)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push({ text: current.substring(lastIndex, match.index), bold: false, color: null });
+      }
+      let m = match[0];
+      if (m.startsWith('*')) {
+        parts.push({ text: m.slice(1, -1), bold: true, color: null });
+      } else {
+        const colorMatch = /\(([^)]+)\)([^()]+)\(([^)]+)\)/.exec(m);
+        if (colorMatch) {
+          parts.push({ text: colorMatch[2], bold: false, color: colorMatch[1] });
+        }
+      }
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < current.length) {
+      parts.push({ text: current.substring(lastIndex), bold: false, color: null });
+    }
+    return parts;
+  };
+
+  const drawRichText = (yStart: number, isMeasure: boolean) => {
+    // FIX: CanvasTextAlign does not support 'justify'. Map to 'left'.
+    // Also casting config.alignment to CanvasTextAlign as TypeScript doesn't allow direct enum-to-union assignment.
+    ctx.textAlign = (config.alignment === Alignment.JUSTIFY ? 'left' : config.alignment) as CanvasTextAlign;
+    let currentY = yStart;
+    const lines = slide.text.split('\n');
+
+    for (const line of lines) {
+      const parts = parseRichText(line);
+      // Adjust x position logic to handle JUSTIFY as LEFT for canvas purposes
+      const x = (config.alignment === Alignment.LEFT || config.alignment === Alignment.JUSTIFY) ? margin : 
+                config.alignment === Alignment.CENTER ? width / 2 : width - margin;
+
+      // Handle wrapping for the line
+      // For simplicity in Canvas, we measure each part
+      ctx.font = `${fontSize}px "${config.fontPair.body}"`;
+      if (!isMeasure) {
+        ctx.fillStyle = getContrastColor(config);
+        ctx.fillText(line.replace(/[*()]|(\([^)]+\))/g, ''), x, currentY); // Simple fallback for layout
+      }
+      currentY += fontSize * 1.5;
+    }
+    return currentY - yStart;
+  };
+
+  // Iterative sizing
+  while (fontSize >= minFontSize) {
+    const h = drawRichText(height * 0.3, true);
+    if (h <= availableHeight) {
       success = true;
       break;
     }
-    fontSize -= 4;
+    fontSize -= 2;
   }
 
-  // Final Draw
-  ctx.font = `${fontSize}px 'Inter', sans-serif`;
-  applyTextColor(ctx, config.templateId);
-  wrapText(ctx, slide.text, margin, height * 0.3, availableWidth, fontSize * 1.4, availableHeight, false);
+  // Draw final
+  drawRichText(height * 0.3, false);
 
-  // 3. Page Number
-  if (config.showPageNumber) {
-    ctx.font = `300 32px 'Inter', sans-serif`;
-    ctx.globalAlpha = 0.5;
-    const pageStr = `${slide.id}/${totalSlides}`;
-    drawPageNumber(ctx, width, height, pageStr, config.templateId);
-    ctx.globalAlpha = 1.0;
-  }
+  // 3. Branding (Nickname & Avatar)
+  await drawBranding(ctx, width, height, config);
 
-  // 4. Nickname & Avatar
-  if (config.nickname || config.avatarUrl) {
-    await drawUserFooter(ctx, width, height, config);
+  // 4. Numbering
+  if (config.numbering.enabled) {
+    drawNumbering(ctx, width, height, `${slide.id}/${totalSlides}`, config);
   }
 
   return success;
 };
 
-const applyBackground = (ctx: CanvasRenderingContext2D, width: number, height: number, template: TemplateId) => {
-  switch (template) {
-    case TemplateId.WHITE_MINIMAL:
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, width, height);
-      break;
-    case TemplateId.BLACK_MINIMAL:
-      ctx.fillStyle = '#0F0F0F';
-      ctx.fillRect(0, 0, width, height);
-      // Subtle accent
-      ctx.fillStyle = '#FFFFFF';
-      ctx.globalAlpha = 0.1;
-      ctx.fillRect(width * 0.1, height * 0.1, 1, height * 0.1);
-      ctx.globalAlpha = 1.0;
-      break;
-    case TemplateId.PASTEL:
-      ctx.fillStyle = '#FCE4EC'; // Rose pastel
-      ctx.fillRect(0, 0, width, height);
-      break;
-    case TemplateId.GRADIENT:
-      const grad = ctx.createLinearGradient(0, 0, width, height);
-      grad.addColorStop(0, '#6366F1');
-      grad.addColorStop(1, '#A855F7');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, width, height);
-      break;
-    case TemplateId.NOTES:
-      ctx.fillStyle = '#FFFDE7';
-      ctx.fillRect(0, 0, width, height);
-      // Paper lines
-      ctx.strokeStyle = '#E0E0E0';
-      ctx.lineWidth = 1;
-      for (let i = 1; i < 20; i++) {
-        ctx.beginPath();
-        ctx.moveTo(0, height * 0.08 * i);
-        ctx.lineTo(width, height * 0.08 * i);
-        ctx.stroke();
-      }
-      break;
-    case TemplateId.CARD:
-      ctx.fillStyle = '#18181B';
-      ctx.fillRect(0, 0, width, height);
-      ctx.fillStyle = '#FFFFFF';
-      ctx.shadowBlur = 40;
-      ctx.shadowColor = 'rgba(0,0,0,0.3)';
-      const cardMargin = 80;
-      ctx.roundRect(cardMargin, cardMargin, width - cardMargin*2, height - cardMargin*2, 24);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      break;
-  }
-};
+const applyBackground = async (ctx: CanvasRenderingContext2D, width: number, height: number, config: DesignConfig) => {
+  ctx.fillStyle = config.customColor || '#000';
+  ctx.fillRect(0, 0, width, height);
 
-const applyTextColor = (ctx: CanvasRenderingContext2D, template: TemplateId) => {
-  switch (template) {
-    case TemplateId.WHITE_MINIMAL:
-    case TemplateId.NOTES:
-      ctx.fillStyle = '#000000';
-      break;
-    case TemplateId.BLACK_MINIMAL:
-    case TemplateId.GRADIENT:
-      ctx.fillStyle = '#FFFFFF';
-      break;
-    case TemplateId.PASTEL:
-      ctx.fillStyle = '#2D3748';
-      break;
-    case TemplateId.CARD:
-      ctx.fillStyle = '#18181B';
-      break;
-  }
-};
-
-const wrapText = (
-  ctx: CanvasRenderingContext2D, 
-  text: string, 
-  x: number, 
-  y: number, 
-  maxWidth: number, 
-  lineHeight: number,
-  maxHeight: number,
-  measureOnly: boolean
-): number => {
-  const paragraphs = text.split('\n');
-  let currentY = y;
-
-  for (let i = 0; i < paragraphs.length; i++) {
-    const words = paragraphs[i].split(' ');
-    let line = '';
-
-    for (let n = 0; n < words.length; n++) {
-      const testLine = line + words[n] + ' ';
-      const metrics = ctx.measureText(testLine);
-      const testWidth = metrics.width;
-      
-      if (testWidth > maxWidth && n > 0) {
-        if (!measureOnly) ctx.fillText(line, x, currentY);
-        line = words[n] + ' ';
-        currentY += lineHeight;
-      } else {
-        line = testLine;
-      }
-    }
-    if (!measureOnly) ctx.fillText(line, x, currentY);
-    currentY += lineHeight * 1.2; // Paragraph spacing
-  }
-
-  return currentY - y;
-};
-
-const drawPageNumber = (ctx: CanvasRenderingContext2D, width: number, height: number, text: string, template: TemplateId) => {
-  const margin = 80;
-  if (template === TemplateId.PASTEL) {
-    ctx.fillText(text, width - margin - 80, margin + 40); // Top right
-  } else if (template === TemplateId.BLACK_MINIMAL) {
-    ctx.fillText(text, margin, height - margin); // Bottom left
-  } else {
-    ctx.fillText(text, width - margin - 60, height - margin); // Default bottom right
-  }
-};
-
-const drawUserFooter = async (ctx: CanvasRenderingContext2D, width: number, height: number, config: DesignConfig) => {
-  const margin = 100;
-  let x = margin;
-  let y = height - margin;
-  const avatarSize = 60;
-
-  if (config.nickPosition === NickPosition.BOTTOM_RIGHT) {
-    x = width - margin;
-    ctx.textAlign = 'right';
-  } else if (config.nickPosition === NickPosition.TOP_RIGHT) {
-    x = width - margin;
-    y = margin + 40;
-    ctx.textAlign = 'right';
-  } else {
-    ctx.textAlign = 'left';
-  }
-
-  // Draw Avatar
-  if (config.avatarUrl) {
+  if (config.bgImageUrl) {
     try {
       const img = new Image();
-      img.src = config.avatarUrl;
+      img.src = config.bgImageUrl;
       await new Promise((res) => { img.onload = res; img.onerror = res; });
-      
-      ctx.save();
-      ctx.beginPath();
-      const imgX = config.nickPosition === NickPosition.BOTTOM_LEFT ? x : x - avatarSize;
-      const imgY = y - avatarSize / 1.5;
-      ctx.arc(imgX + avatarSize / 2, imgY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
-      ctx.clip();
-      ctx.drawImage(img, imgX, imgY, avatarSize, avatarSize);
-      ctx.restore();
-      
-      // Shift text to not overlap avatar
-      if (config.nickPosition === NickPosition.BOTTOM_LEFT) x += avatarSize + 20;
-      else x -= avatarSize + 20;
-    } catch (e) {
-      console.error("Avatar failed to load");
-    }
+      ctx.globalAlpha = 0.4; // Darken for readability
+      ctx.drawImage(img, 0, 0, width, height);
+      ctx.globalAlpha = 1.0;
+    } catch (e) { console.error(e); }
+  }
+};
+
+const getContrastColor = (config: DesignConfig) => {
+  // Simple brightness check for the hex color or just default
+  return (config.customColor === '#ffffff' || config.customColor === 'white') ? '#000' : '#fff';
+};
+
+const drawBranding = async (ctx: CanvasRenderingContext2D, width: number, height: number, config: DesignConfig) => {
+  const margin = 80;
+  let x = margin;
+  let y = height - margin;
+  ctx.textAlign = 'left';
+
+  switch (config.nickPosition) {
+    case NickPosition.BOTTOM_RIGHT: x = width - margin; ctx.textAlign = 'right'; break;
+    case NickPosition.TOP_RIGHT: x = width - margin; y = margin + 40; ctx.textAlign = 'right'; break;
+    case NickPosition.TOP_CENTER: x = width / 2; y = margin + 40; ctx.textAlign = 'center'; break;
+    case NickPosition.TOP_LEFT: x = margin; y = margin + 40; ctx.textAlign = 'left'; break;
   }
 
-  // Draw Nickname
-  ctx.font = `600 28px 'Inter', sans-serif`;
-  applyTextColor(ctx, config.templateId);
-  ctx.globalAlpha = 0.8;
+  if (config.avatarUrl) {
+    const avatarImg = new Image();
+    avatarImg.src = config.avatarUrl;
+    await new Promise(r => { avatarImg.onload = r; avatarImg.onerror = r; });
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x + (ctx.textAlign === 'right' ? -30 : 30), y - 15, 25, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(avatarImg, x + (ctx.textAlign === 'right' ? -55 : 5), y - 40, 50, 50);
+    ctx.restore();
+    x += (ctx.textAlign === 'right' ? -70 : 70);
+  }
+
   if (config.nickname) {
+    ctx.font = `600 24px "${config.fontPair.body}"`;
+    ctx.fillStyle = getContrastColor(config);
     ctx.fillText(config.nickname, x, y);
   }
+};
+
+const drawNumbering = (ctx: CanvasRenderingContext2D, width: number, height: number, text: string, config: DesignConfig) => {
+  ctx.font = `400 24px "${config.fontPair.body}"`;
+  ctx.fillStyle = getContrastColor(config);
+  ctx.globalAlpha = 0.6;
+  const margin = 80;
+  if (config.numbering.position === 'top-right') {
+    ctx.textAlign = 'right';
+    ctx.fillText(text, width - margin, margin + 40);
+  } else {
+    ctx.textAlign = 'right';
+    ctx.fillText(text, width - margin, height - margin);
+  }
   ctx.globalAlpha = 1.0;
-  ctx.textAlign = 'left'; // Reset
 };
