@@ -17,31 +17,40 @@ export enum Alignment {
 }
 
 export enum NickPosition {
-  BOTTOM_LEFT = 'BOTTOM_LEFT',
-  BOTTOM_RIGHT = 'BOTTOM_RIGHT',
-  TOP_RIGHT = 'TOP_RIGHT',
-  TOP_CENTER = 'TOP_CENTER',
-  TOP_LEFT = 'TOP_LEFT'
+  TOP_LEFT = 'Вверху слева',
+  TOP_CENTER = 'Вверху по центру',
+  TOP_RIGHT = 'Вверху справа',
+  BOTTOM_LEFT = 'Внизу слева',
+  BOTTOM_CENTER = 'Внизу по центру',
+  BOTTOM_RIGHT = 'Внизу справа'
 }
 
-export enum TemplateId {
-  COLOR = 'COLOR',
-  IMAGE = 'IMAGE',
-  GRADIENT = 'GRADIENT',
-  MINIMAL = 'MINIMAL'
+export enum SlideFormat {
+  NORMAL = 'Обычный пост',
+  PLAN = 'Пост-план',
+  LIST = 'Пост-список',
+  POINT_EXPLAIN = 'Пункт + пояснение'
 }
 
-export interface SlideData {
-  id: number;
-  text: string;
+export interface FinalSlideConfig {
+  enabled: boolean;
+  textBefore: string;
+  codeWord: string;
+  textAfter: string;
+  blogDescription: string;
+  codeWordY: number; 
+  avatarY: number;   
 }
 
 export interface DesignConfig {
-  templateId: TemplateId;
+  splitType: SplitType;
+  format: SlideFormat;
   customColor: string;
+  textColor: string;
   bgImageUrl: string | null;
   alignment: Alignment;
   fontPair: {
+    name: string;
     header: string;
     body: string;
     isCustom?: boolean;
@@ -58,4 +67,17 @@ export interface DesignConfig {
     middle: AspectRatio;
     last: AspectRatio;
   };
+  fontSizes: {
+    first: number;
+    middle: number;
+    last: number;
+    lineHeight: number;
+    verticalOffset: number; // 0-100
+  };
+  finalSlide: FinalSlideConfig;
+}
+
+export interface SlideData {
+  id: number;
+  text: string;
 }
