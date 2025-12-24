@@ -49,7 +49,7 @@ const App: React.FC = () => {
     numbering: { enabled: true, position: 'bottom-right' },
     sizes: { first: AspectRatio.PORTRAIT, middle: AspectRatio.PORTRAIT, last: AspectRatio.PORTRAIT },
     fontSizes: { first: 64, middle: 64, last: 64, lineHeight: 1.35, verticalOffset: 50 },
-    finalSlide: { enabled: true, textBefore: 'Забирай подарок', codeWord: 'АКСЕЛЕРАТОР', textAfter: 'в директ', blogDescription: '', codeWordY: 50, avatarY: 85 }
+    finalSlide: { enabled: true, textBefore: 'Забирай подарок', codeWord: 'АКСЕЛЕРАТОР', textAfter: 'в директ', blogDescription: '', codeWordY: 50, avatarY: 85, codeWordVerticalOffset: 35 }
   });
 
   const resetAll = () => window.location.reload();
@@ -57,7 +57,7 @@ const App: React.FC = () => {
   const parseSlides = useCallback(() => {
     let raw: string[] = [];
     if (config.splitType === SplitType.EMPTY_LINE) raw = inputText.split(/\n\s*\n/);
-    else if (config.splitType === SplitType.DASHES) raw = inputText.split(/---/);
+    else if (config.splitType === SplitType.DASHES) raw = inputText.split(/-{3,}/); // 3 or more dashes
     else raw = inputText.split(/Слайд \d+:|Слайд \d+/i);
     const filtered = raw.map(s => s.trim()).filter(s => s.length > 0).slice(0, 20);
     setSlides(filtered.map((text, i) => ({ id: i + 1, text })));
@@ -276,6 +276,10 @@ const App: React.FC = () => {
                   <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Текст над словом</span><input type="text" placeholder="Забирай подарок" value={config.finalSlide.textBefore} onChange={e => setConfig(c => ({...c, finalSlide: {...c.finalSlide, textBefore: e.target.value}}))} className="w-full bg-zinc-900 p-3 rounded-xl border border-zinc-800 text-sm text-white" /></div>
                   <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Кодовое слово</span><input type="text" placeholder="АКСЕЛЕРАТОР" value={config.finalSlide.codeWord} onChange={e => handleCodeWordChange(e.target.value)} className="w-full bg-zinc-900 p-3 rounded-xl border border-zinc-800 text-sm font-black text-white" /></div>
                   <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Текст под словом</span><input type="text" placeholder="в директ" value={config.finalSlide.textAfter} onChange={e => setConfig(c => ({...c, finalSlide: {...c.finalSlide, textAfter: e.target.value}}))} className="w-full bg-zinc-900 p-3 rounded-xl border border-zinc-800 text-sm text-white" /></div>
+                  <div className="space-y-1">
+                    <span className="text-[9px] text-zinc-500 uppercase font-bold">Положение кодового слова (Y)</span>
+                    <input type="range" min="15" max="65" value={config.finalSlide.codeWordVerticalOffset} onChange={e => setConfig(c => ({...c, finalSlide: {...c.finalSlide, codeWordVerticalOffset: parseInt(e.target.value)}}))} className="w-full accent-white" />
+                  </div>
                   <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Призыв подписаться (4-7 слов)</span><textarea value={config.finalSlide.blogDescription} onChange={e => handleBlogDescChange(e.target.value)} placeholder="пишу про дизайн и жизнь..." className="w-full h-20 bg-zinc-900 p-3 rounded-xl border border-zinc-800 text-sm text-white" /></div>
                 </div>
               </div>

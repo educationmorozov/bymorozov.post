@@ -40,6 +40,7 @@ export interface FinalSlideConfig {
   blogDescription: string;
   codeWordY: number; 
   avatarY: number;   
+  codeWordVerticalOffset: number; // New field: 0-100%
 }
 
 export interface DesignConfig {

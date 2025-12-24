@@ -132,9 +132,16 @@ export const renderSlideToCanvas = async (
       const img = new Image();
       img.src = config.bgImageUrl;
       await new Promise((r, j) => { img.onload = r; img.onerror = j; });
+      
       ctx.save();
       ctx.globalAlpha = 0.45;
-      ctx.drawImage(img, 0, 0, width, height);
+      
+      // Object-fit Cover logic
+      const scale = Math.max(width / img.width, height / img.height);
+      const x = (width / 2) - (img.width / 2) * scale;
+      const y = (height / 2) - (img.height / 2) * scale;
+      ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+      
       ctx.restore();
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       ctx.fillRect(0, 0, width, height);
@@ -149,10 +156,27 @@ export const renderSlideToCanvas = async (
     let headerText = '';
 
     if (config.format === SlideFormat.POINT_EXPLAIN) {
-      const splitIdx = slide.text.search(/[.!\n]/);
-      if (splitIdx !== -1) {
-        headerText = slide.text.substring(0, splitIdx + 1).trim();
-        textToRender = slide.text.substring(splitIdx + 1).trim();
+      const firstDelimiter = slide.text.search(/[.!\n]/);
+      if (firstDelimiter !== -1) {
+        let firstPart = slide.text.substring(0, firstDelimiter + 1).trim();
+        // Check if just a number or step
+        const isJustNumber = /^\d+[\.\)]?$/.test(firstPart);
+        
+        if (isJustNumber && !isFirst) {
+          const secondPartStart = firstDelimiter + 1;
+          const secondDelimiter = slide.text.substring(secondPartStart).search(/[.!\n]/);
+          if (secondDelimiter !== -1) {
+            const splitIdx = secondPartStart + secondDelimiter + 1;
+            headerText = slide.text.substring(0, splitIdx).trim();
+            textToRender = slide.text.substring(splitIdx).trim();
+          } else {
+            headerText = slide.text;
+            textToRender = "";
+          }
+        } else {
+          headerText = firstPart;
+          textToRender = slide.text.substring(firstDelimiter + 1).trim();
+        }
       } else {
         headerText = slide.text;
         textToRender = "";
@@ -168,7 +192,6 @@ export const renderSlideToCanvas = async (
     const minFontSize = 30;
     
     if (headerText) {
-      // Logic for POINT_EXPLAIN: Combined scaling
       let finalHeadLayout: any = null;
       let finalBodyLayout: any = null;
       let currentFontSize = baseFontSize;
@@ -295,28 +318,29 @@ const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, he
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   
-  const mainY = height * 0.35;
-  const codeWordSpacing = 220; 
+  const mainY = height * (f.codeWordVerticalOffset / 100);
+  const codeWordSpacingBefore = 220; 
+  const codeWordSpacingAfter = 320; // Increased spacing as requested (2 empty lines feel)
   
   // 1. Text Before
   const fontSizeBefore = width * 0.045;
   ctx.font = `400 ${fontSizeBefore}px "${activeFont}"`;
   const beforeLayout = getWrappedLines(ctx, f.textBefore, maxWidth, fontSizeBefore, activeFont, 1.3);
-  let curBeforeY = mainY - codeWordSpacing - beforeLayout.totalHeight / 2;
+  let curBeforeY = mainY - codeWordSpacingBefore - beforeLayout.totalHeight / 2;
   beforeLayout.lines.forEach(l => {
     ctx.fillStyle = textColor;
     ctx.fillText(l.parts.map(p => p.text).join(''), width / 2, curBeforeY);
     curBeforeY += fontSizeBefore * 1.3;
   });
 
-  // 2. Code Word (Enhanced spacing to avoid font overlap)
+  // 2. Code Word
   const codeWordFontSize = width * 0.08;
   ctx.font = `900 ${codeWordFontSize}px "${headerFont}"`;
   const codeWord = f.codeWord.toUpperCase();
   const metrics = ctx.measureText(codeWord);
   
   const paddingH = 100; 
-  const rectH = width * 0.2; // Even more height for safety
+  const rectH = width * 0.22; 
   const rectW = Math.min(metrics.width + paddingH * 2, maxWidth);
 
   ctx.strokeStyle = textColor; ctx.lineWidth = 7;
@@ -331,7 +355,7 @@ const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, he
   const fontSizeAfter = width * 0.045;
   ctx.font = `400 ${fontSizeAfter}px "${activeFont}"`;
   const afterLayout = getWrappedLines(ctx, f.textAfter, maxWidth, fontSizeAfter, activeFont, 1.3);
-  let curAfterY = mainY + codeWordSpacing - afterLayout.totalHeight / 2;
+  let curAfterY = mainY + codeWordSpacingAfter - afterLayout.totalHeight / 2;
   afterLayout.lines.forEach(l => {
     ctx.fillStyle = textColor;
     ctx.fillText(l.parts.map(p => p.text).join(''), width / 2, curAfterY);
