@@ -281,14 +281,14 @@ const App: React.FC = () => {
                    СКАЧАТЬ ZIP АРХИВ
                  </button>
                  <p className="text-[10px] text-zinc-500 text-center font-bold uppercase">Нажмите на слайд для мгновенного скачивания</p>
-                 <div className="grid grid-cols-2 gap-4 max-h-[400px] overflow-y-auto p-2 custom-scrollbar border border-zinc-900 rounded-2xl bg-black/50">
+                 <div className="grid grid-cols-3 gap-2 max-h-[450px] overflow-y-auto p-2 custom-scrollbar border border-zinc-900 rounded-2xl bg-black/50">
                     {slides.map(s => (
-                      <button key={s.id} onClick={() => downloadOne(s.id)} className="aspect-[4/5] bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 hover:border-white transition-all transform active:scale-95">
+                      <button key={s.id} onClick={() => downloadOne(s.id)} className="aspect-[4/5] bg-zinc-900 rounded-lg overflow-hidden border border-zinc-800 hover:border-white transition-all transform active:scale-95 shadow-lg">
                         <SlidePreview slide={s} total={config.finalSlide.enabled ? slides.length + 1 : slides.length} config={config} />
                       </button>
                     ))}
                     {config.finalSlide.enabled && (
-                      <button onClick={() => downloadOne('final')} className="aspect-[4/5] bg-white/5 rounded-xl overflow-hidden border border-white/10 hover:border-white transition-all transform active:scale-95">
+                      <button onClick={() => downloadOne('final')} className="aspect-[4/5] bg-white/5 rounded-lg overflow-hidden border border-white/10 hover:border-white transition-all transform active:scale-95 shadow-lg">
                          <SlidePreview slide={null} total={slides.length + 1} config={config} isFinal={true} />
                       </button>
                     )}

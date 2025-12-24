@@ -262,15 +262,15 @@ const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, he
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   
-  // Center anchor point for content
-  const mainY = height * 0.38;
-  const spacingFromCodeWord = 180; // Larger vertical gap to prevent overlap
+  // Adjusted Y center to allow more vertical space
+  const mainY = height * 0.35;
+  const codeWordPaddingV = 180; // Gap between code word and text above/below
   
   // 1. Text Before
   const fontSizeBefore = width * 0.045;
   ctx.font = `400 ${fontSizeBefore}px "${activeFont}"`;
   const beforeLayout = getWrappedLines(ctx, f.textBefore, maxWidth, fontSizeBefore, activeFont, 1.3);
-  let curBeforeY = mainY - spacingFromCodeWord - beforeLayout.totalHeight / 2;
+  let curBeforeY = mainY - codeWordPaddingV - beforeLayout.totalHeight / 2;
   beforeLayout.lines.forEach(l => {
     ctx.fillStyle = textColor;
     ctx.fillText(l.parts.map(p => p.text).join(''), width / 2, curBeforeY);
@@ -290,20 +290,20 @@ const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, he
   ctx.stroke();
   ctx.fillText(codeWord, width/2, mainY);
 
-  // 3. Text After
+  // 3. Text After (Significant gap added to prevent overlap)
   const fontSizeAfter = width * 0.045;
   ctx.font = `400 ${fontSizeAfter}px "${activeFont}"`;
   const afterLayout = getWrappedLines(ctx, f.textAfter, maxWidth, fontSizeAfter, activeFont, 1.3);
-  // Increase curAfterY to start well below the codeWord bubble
-  let curAfterY = mainY + spacingFromCodeWord - afterLayout.totalHeight / 2;
+  // Using explicit extra spacing after the codeWord box
+  let curAfterY = mainY + codeWordPaddingV - afterLayout.totalHeight / 2;
   afterLayout.lines.forEach(l => {
     ctx.fillStyle = textColor;
     ctx.fillText(l.parts.map(p => p.text).join(''), width / 2, curAfterY);
     curAfterY += fontSizeAfter * 1.3;
   });
 
-  // 4. Improved Branding at the bottom
-  const footerY = height - margin - 110; 
+  // 4. Branding at the bottom (Centered Branding)
+  const footerY = height - margin - 100; 
   const avatarSize = 135;
   const avatarX = margin;
   const textXStart = avatarX + avatarSize + 35;
@@ -329,8 +329,8 @@ const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, he
 
   const nickFontSize = width * 0.05;
   const descFontSize = width * 0.038;
-  const descLineHeight = descFontSize * 1.3;
-  const totalTextH = nickFontSize + (descLines.length * descLineHeight) + 10;
+  const descLineHeight = descFontSize * 1.4;
+  const totalTextH = nickFontSize + (descLines.length * descLineHeight) + 12;
   
   const avatarCenterY = footerY;
   const textTopY = avatarCenterY - totalTextH / 2;
@@ -358,7 +358,7 @@ const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, he
     } catch (e) {}
   }
 
-  // Draw Text
+  // Draw Text aligned
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillStyle = textColor;
@@ -368,7 +368,7 @@ const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, he
   
   ctx.font = `400 ${descFontSize}px "${activeFont}"`;
   descLines.forEach((line, i) => {
-    ctx.fillText(line, textXStart, textTopY + nickFontSize + 10 + (i * descLineHeight));
+    ctx.fillText(line, textXStart, textTopY + nickFontSize + 12 + (i * descLineHeight));
   });
 };
 
