@@ -1,5 +1,5 @@
 
-import { SlideData, DesignConfig, Alignment, NickPosition } from '../types.ts';
+import { SlideData, DesignConfig, Alignment, NickPosition, AspectRatio, SlideFormat } from '../types.ts';
 
 export const saveBlob = (blob: Blob, fileName: string) => {
   const url = URL.createObjectURL(blob);
@@ -18,15 +18,28 @@ interface TextPart {
   color: string | null;
 }
 
-const parseRichText = (text: string): TextPart[] => {
+const parseRichText = (text: string, format?: SlideFormat): TextPart[] => {
   const parts: TextPart[] = [];
+  
+  let processedText = text;
+  if (format === SlideFormat.PLAN) {
+    processedText = text.split('\n').map(line => {
+      const regex = /^(шаг|день)\s*\d+/i;
+      const match = line.match(regex);
+      if (match) {
+        return `*${match[0]}*${line.substring(match[0].length)}`;
+      }
+      return line;
+    }).join('\n');
+  }
+
   const regex = /(\*[^*]+\*|\[[^\]]+\]\(#[a-fA-F0-9]{3,6}\))/g;
   let lastIndex = 0;
   let match;
 
-  while ((match = regex.exec(text)) !== null) {
+  while ((match = regex.exec(processedText)) !== null) {
     if (match.index > lastIndex) {
-      parts.push({ text: text.substring(lastIndex, match.index), bold: false, color: null });
+      parts.push({ text: processedText.substring(lastIndex, match.index), bold: false, color: null });
     }
     const m = match[0];
     if (m.startsWith('*')) {
@@ -39,47 +52,61 @@ const parseRichText = (text: string): TextPart[] => {
     }
     lastIndex = regex.lastIndex;
   }
-  if (lastIndex < text.length) {
-    parts.push({ text: text.substring(lastIndex), bold: false, color: null });
+  if (lastIndex < processedText.length) {
+    parts.push({ text: processedText.substring(lastIndex), bold: false, color: null });
   }
   return parts;
 };
 
-const drawWrappedRichText = (
+const getWrappedLines = (
   ctx: CanvasRenderingContext2D,
   text: string,
-  x: number,
-  y: number,
   maxWidth: number,
-  lineHeight: number,
-  align: Alignment,
-  defaultColor: string,
+  fontSize: number,
   fontFamily: string,
-  fontSize: number
+  lineHeightScale: number,
+  format?: SlideFormat
 ) => {
-  const lines = text.split('\n');
-  let currentY = y;
+  const paragraphs = text.split('\n');
+  const allLines: { parts: TextPart[]; isParagraphEnd?: boolean }[] = [];
+  
+  paragraphs.forEach((p, pIdx) => {
+    const parts = parseRichText(p, format);
+    let currentLineParts: TextPart[] = [];
+    let currentLineWidth = 0;
 
-  lines.forEach(line => {
-    const parts = parseRichText(line);
-    ctx.font = `${fontSize}px "${fontFamily}"`;
-    const plainText = line.replace(/[*]|\[|\]\(#[a-fA-F0-9]{3,6}\)/g, '');
-    let currentX = x;
-    
-    if (align === Alignment.CENTER) {
-      const metrics = ctx.measureText(plainText);
-      currentX = x - metrics.width / 2;
-    }
-
-    parts.forEach(part => {
+    parts.forEach((part) => {
       ctx.font = `${part.bold ? '700' : '400'} ${fontSize}px "${fontFamily}"`;
-      ctx.fillStyle = part.color || defaultColor;
-      ctx.fillText(part.text, currentX, currentY);
-      currentX += ctx.measureText(part.text).width;
+      const words = part.text.split(' ');
+
+      words.forEach((word, idx) => {
+        const wordWithSpace = (idx === 0 && currentLineParts.length === 0) ? word : ' ' + word;
+        const wordWidth = ctx.measureText(wordWithSpace).width;
+
+        if (currentLineWidth + wordWidth > maxWidth && currentLineParts.length > 0) {
+          allLines.push({ parts: currentLineParts });
+          currentLineParts = [{ ...part, text: word }];
+          currentLineWidth = ctx.measureText(word).width;
+        } else {
+          currentLineParts.push({ ...part, text: wordWithSpace });
+          currentLineWidth += wordWidth;
+        }
+      });
     });
-    currentY += lineHeight;
+    if (currentLineParts.length > 0) {
+      allLines.push({ parts: currentLineParts, isParagraphEnd: pIdx < paragraphs.length - 1 });
+    }
   });
-  return currentY;
+
+  let totalHeight = 0;
+  allLines.forEach((l) => {
+    totalHeight += fontSize * lineHeightScale;
+    if (l.isParagraphEnd && format === SlideFormat.PLAN) {
+      totalHeight += fontSize * (lineHeightScale - 1); 
+    }
+  });
+
+  return { lines: allLines, totalHeight };
 };
 
 export const renderSlideToCanvas = async (
@@ -94,7 +121,8 @@ export const renderSlideToCanvas = async (
 
   const width = canvas.width;
   const height = canvas.height;
-  const margin = width * 0.08;
+  const safeMargin = 130;
+  const maxWidth = width - safeMargin * 2;
 
   ctx.fillStyle = config.customColor;
   ctx.fillRect(0, 0, width, height);
@@ -103,41 +131,121 @@ export const renderSlideToCanvas = async (
     try {
       const img = new Image();
       img.src = config.bgImageUrl;
-      await new Promise(r => { img.onload = r; img.onerror = r; });
-      ctx.globalAlpha = 0.3;
+      await new Promise((r, j) => { img.onload = r; img.onerror = j; });
+      ctx.save();
+      ctx.globalAlpha = 0.45;
       ctx.drawImage(img, 0, 0, width, height);
-      ctx.globalAlpha = 1.0;
+      ctx.restore();
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(0, 0, width, height);
     } catch (e) {}
   }
 
   if (isFinal) {
-    await renderFinalSlide(ctx, width, height, margin, config);
+    await renderFinalSlide(ctx, width, height, safeMargin, config);
   } else if (slide) {
     const isFirst = slide.id === 1;
-    const baseSize = isFirst ? config.fontSizes.first : config.fontSizes.middle;
-    const fontSize = (width / 1000) * baseSize;
-    const lineHeight = fontSize * config.fontSizes.lineHeight;
-    const yStart = (height * config.fontSizes.verticalOffset) / 100;
+    let textToRender = slide.text;
+    let headerText = '';
 
-    ctx.textBaseline = 'top';
-    drawWrappedRichText(
-      ctx,
-      slide.text,
-      config.alignment === Alignment.CENTER ? width / 2 : margin,
-      yStart,
-      width - margin * 2,
-      lineHeight,
-      config.alignment,
-      config.textColor,
-      config.fontPair.body,
-      fontSize
-    );
+    if (config.format === SlideFormat.POINT_EXPLAIN) {
+      const splitIdx = slide.text.search(/[.!\n]/);
+      if (splitIdx !== -1) {
+        headerText = slide.text.substring(0, splitIdx + 1).trim();
+        textToRender = slide.text.substring(splitIdx + 1).trim();
+      } else {
+        headerText = slide.text;
+        textToRender = "";
+      }
+    }
+
+    const activeFont = isFirst ? config.fontPair.header : config.fontPair.body;
+    const bodyFont = config.fontPair.body;
+    const lineHeightScale = config.fontSizes.lineHeight;
+    
+    let baseFontSize = isFirst ? config.fontSizes.first : config.fontSizes.middle;
+    const minFontSize = 30;
+    
+    if (headerText) {
+      const headSize = baseFontSize * 1.35;
+      ctx.font = `700 ${headSize}px "${config.fontPair.header}"`;
+      const headLayout = getWrappedLines(ctx, headerText, maxWidth, headSize, config.fontPair.header, 1.25);
+      const bodyLayout = getWrappedLines(ctx, textToRender, maxWidth, baseFontSize, bodyFont, lineHeightScale, config.format);
+      
+      const totalH = headLayout.totalHeight + 50 + bodyLayout.totalHeight;
+      let curY = (height * config.fontSizes.verticalOffset / 100) - (totalH / 2);
+
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      headLayout.lines.forEach(l => {
+        ctx.fillStyle = config.textColor;
+        ctx.fillText(l.parts.map(p => p.text).join(''), width / 2, curY);
+        curY += headSize * 1.25;
+      });
+      curY += 50;
+      
+      bodyLayout.lines.forEach(l => {
+        let lx = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
+        if (config.alignment === Alignment.CENTER) {
+          ctx.textAlign = 'center';
+          ctx.fillText(l.parts.map(p => p.text).join(''), lx, curY);
+        } else {
+          ctx.textAlign = 'left';
+          let tempX = lx;
+          l.parts.forEach(p => {
+             ctx.font = `${p.bold ? '700' : '400'} ${baseFontSize}px "${bodyFont}"`;
+             ctx.fillStyle = p.color || config.textColor;
+             ctx.fillText(p.text, tempX, curY);
+             tempX += ctx.measureText(p.text).width;
+          });
+        }
+        curY += baseFontSize * lineHeightScale;
+        if (l.isParagraphEnd && config.format === SlideFormat.PLAN) curY += baseFontSize * (lineHeightScale - 1);
+      });
+    } else {
+      let finalLayout: any = null;
+      while (baseFontSize >= minFontSize) {
+        const layout = getWrappedLines(ctx, textToRender, maxWidth, baseFontSize, activeFont, lineHeightScale, config.format);
+        if (layout.totalHeight <= height - safeMargin * 3) {
+          finalLayout = layout;
+          break;
+        }
+        baseFontSize -= 2;
+      }
+      if (!finalLayout) finalLayout = getWrappedLines(ctx, textToRender, maxWidth, minFontSize, activeFont, lineHeightScale, config.format);
+
+      const lineHeight = baseFontSize * lineHeightScale;
+      let y = (height * config.fontSizes.verticalOffset / 100) - (finalLayout.totalHeight / 2);
+
+      ctx.textBaseline = 'top';
+      finalLayout.lines.forEach((line: any) => {
+        let x = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
+        let lineWidth = 0;
+        
+        if (config.alignment !== Alignment.LEFT) {
+          line.parts.forEach((p: TextPart) => {
+            ctx.font = `${p.bold ? '700' : '400'} ${baseFontSize}px "${activeFont}"`;
+            lineWidth += ctx.measureText(p.text).width;
+          });
+          if (config.alignment === Alignment.CENTER) x -= lineWidth / 2;
+        }
+        ctx.textAlign = 'left';
+
+        line.parts.forEach((p: TextPart) => {
+          ctx.font = `${p.bold ? '700' : '400'} ${baseFontSize}px "${activeFont}"`;
+          ctx.fillStyle = p.color || config.textColor;
+          ctx.fillText(p.text, x, y);
+          x += ctx.measureText(p.text).width;
+        });
+        y += lineHeight;
+        if (line.isParagraphEnd && config.format === SlideFormat.PLAN) y += baseFontSize * (lineHeightScale - 1);
+      });
+    }
   }
 
   if (!isFinal) {
-    await drawBranding(ctx, width, height, margin, config);
+    await drawBranding(ctx, width, height, safeMargin, config);
     if (config.numbering.enabled) {
-      drawNumbering(ctx, width, height, margin, `${slide?.id}/${totalSlides}`, config);
+      drawNumbering(ctx, width, height, safeMargin, `${slide?.id}/${totalSlides}`, config);
     }
   }
 
@@ -147,106 +255,136 @@ export const renderSlideToCanvas = async (
 const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, height: number, margin: number, config: DesignConfig) => {
   const f = config.finalSlide;
   const textColor = config.textColor;
-  const bodyFont = config.fontPair.body;
+  const activeFont = config.fontPair.body;
 
-  const codeY = (height * f.codeWordY) / 100;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   
-  ctx.font = `400 ${width * 0.05}px "${bodyFont}"`;
+  const mainY = height * 0.42;
+  
+  ctx.font = `400 ${width * 0.045}px "${activeFont}"`;
   ctx.fillStyle = textColor;
-  ctx.fillText(f.textBefore, width / 2, codeY - 140);
+  ctx.fillText(f.textBefore, width / 2, mainY - 140);
 
-  ctx.font = `700 ${width * 0.09}px "${bodyFont}"`;
+  ctx.font = `900 ${width * 0.08}px "${config.fontPair.header}"`;
   const metrics = ctx.measureText(f.codeWord);
-  const paddingH = 70;
-  const paddingV = 40;
-  const rectW = metrics.width + paddingH * 2;
-  const rectH = width * 0.12 + paddingV * 2;
+  const paddingH = 70, rectH = width * 0.13;
+  const rectW = Math.min(metrics.width + paddingH * 2, width - margin * 2);
 
-  ctx.strokeStyle = textColor;
-  ctx.lineWidth = 5;
+  ctx.strokeStyle = textColor; ctx.lineWidth = 5;
   ctx.beginPath();
-  ctx.roundRect(width / 2 - rectW / 2, codeY - rectH / 2, rectW, rectH, rectH / 2);
+  ctx.roundRect(width/2 - rectW/2, mainY - rectH/2, rectW, rectH, rectH/2);
   ctx.stroke();
-  ctx.fillText(f.codeWord, width / 2, codeY);
+  ctx.fillText(f.codeWord, width/2, mainY);
 
-  ctx.font = `400 ${width * 0.05}px "${bodyFont}"`;
-  ctx.fillText(f.textAfter, width / 2, codeY + 140);
+  ctx.font = `400 ${width * 0.045}px "${activeFont}"`;
+  ctx.fillText(f.textAfter, width / 2, mainY + 140);
 
-  const avatarY = (height * f.avatarY) / 100;
-  let textX = margin;
+  const footerY = height - margin - 150;
+  let textXStart = margin + 170;
 
   if (config.avatarUrl) {
-    const avatarImg = new Image();
-    avatarImg.src = config.avatarUrl;
-    await new Promise(r => { avatarImg.onload = r; avatarImg.onerror = r; });
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(margin + 60, avatarY, 60, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(avatarImg, margin, avatarY - 60, 120, 120);
-    ctx.restore();
-    textX += 150;
+    try {
+      const img = new Image(); img.src = config.avatarUrl;
+      await new Promise((r, j) => { img.onload = r; img.onerror = j; });
+      const avatarSize = 135;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(margin + 67, footerY, 67, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, margin, footerY - 67, avatarSize, avatarSize);
+      ctx.restore();
+    } catch (e) {}
   }
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.font = `700 ${width * 0.04}px "${bodyFont}"`;
-  ctx.fillText(config.nickname || 'аккаунт', textX, avatarY - 45);
-
-  ctx.font = `400 ${width * 0.035}px "${bodyFont}"`;
-  const desc = f.blogDescription || "Подписывайся!";
-  const lines = wrapText(ctx, desc, width - textX - margin);
-  lines.forEach((l, i) => ctx.fillText(l, textX, avatarY - 5 + i * 40));
-};
-
-const wrapText = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number) => {
-  const words = text.split(' ');
-  const lines = [];
-  let currentLine = words[0];
-  for (let i = 1; i < words.length; i++) {
-    const word = words[i];
-    const width = ctx.measureText(currentLine + " " + word).width;
-    if (width < maxWidth) {
-      currentLine += " " + word;
+  ctx.font = `700 ${width * 0.05}px "${activeFont}"`;
+  ctx.fillText(config.nickname || '@account', textXStart, footerY - 30);
+  
+  ctx.font = `400 ${width * 0.038}px "${activeFont}"`;
+  const desc = f.blogDescription || "подписывайся!";
+  
+  const descLines = [];
+  const words = desc.split(' ');
+  let currentLine = '';
+  for(let word of words) {
+    const testLine = currentLine + (currentLine === '' ? '' : ' ') + word;
+    if (ctx.measureText(testLine).width < (width - textXStart - margin)) {
+      currentLine = testLine;
     } else {
-      lines.push(currentLine);
+      descLines.push(currentLine);
       currentLine = word;
     }
   }
-  lines.push(currentLine);
-  return lines;
+  descLines.push(currentLine);
+  
+  descLines.forEach((line, i) => {
+    ctx.fillText(line, textXStart, footerY + 25 + (i * 45));
+  });
 };
 
 const drawBranding = async (ctx: CanvasRenderingContext2D, width: number, height: number, margin: number, config: DesignConfig) => {
-  let x = margin;
-  let y = height - margin;
+  let x = margin, y = height - margin;
+  const avatarRadius = 35;
+  const spacing = 18;
   ctx.textAlign = 'left';
 
   switch (config.nickPosition) {
-    case NickPosition.TOP_LEFT: x = margin; y = margin + 50; break;
-    case NickPosition.TOP_CENTER: x = width/2; y = margin + 50; ctx.textAlign = 'center'; break;
-    case NickPosition.TOP_RIGHT: x = width - margin; y = margin + 50; ctx.textAlign = 'right'; break;
+    case NickPosition.TOP_LEFT: x = margin; y = margin; break;
+    case NickPosition.TOP_CENTER: x = width/2; y = margin; ctx.textAlign = 'center'; break;
+    case NickPosition.TOP_RIGHT: x = width - margin; y = margin; ctx.textAlign = 'right'; break;
     case NickPosition.BOTTOM_LEFT: x = margin; y = height - margin; break;
     case NickPosition.BOTTOM_CENTER: x = width/2; y = height - margin; ctx.textAlign = 'center'; break;
     case NickPosition.BOTTOM_RIGHT: x = width - margin; y = height - margin; ctx.textAlign = 'right'; break;
   }
 
-  if (config.nickname) {
-    ctx.font = `600 ${width * 0.025}px "${config.fontPair.body}"`;
+  const nickname = config.nickname || '@account';
+  ctx.font = `700 ${width * 0.032}px "${config.fontPair.body}"`;
+  const nickWidth = ctx.measureText(nickname).width;
+  
+  if (config.avatarUrl) {
+    try {
+      const img = new Image(); img.src = config.avatarUrl;
+      await new Promise((r, j) => { img.onload = r; img.onerror = j; });
+      
+      let finalAvatarX = x;
+      if (ctx.textAlign === 'center') {
+        const totalW = avatarRadius * 2 + spacing + nickWidth;
+        finalAvatarX = x - totalW/2 + avatarRadius;
+      } else if (ctx.textAlign === 'right') {
+        finalAvatarX = x - nickWidth - spacing - avatarRadius;
+      } else {
+        finalAvatarX = x + avatarRadius;
+      }
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(finalAvatarX, y, avatarRadius, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, finalAvatarX - avatarRadius, y - avatarRadius, avatarRadius * 2, avatarRadius * 2);
+      ctx.restore();
+      
+      ctx.fillStyle = config.textColor;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(nickname, finalAvatarX + avatarRadius + spacing, y);
+    } catch (e) {
+      ctx.fillStyle = config.textColor;
+      ctx.fillText(nickname, x, y);
+    }
+  } else {
     ctx.fillStyle = config.textColor;
-    ctx.fillText(config.nickname, x, y);
+    ctx.textBaseline = 'middle';
+    ctx.fillText(nickname, x, y);
   }
 };
 
 const drawNumbering = (ctx: CanvasRenderingContext2D, width: number, height: number, margin: number, text: string, config: DesignConfig) => {
   ctx.font = `400 ${width * 0.025}px "${config.fontPair.body}"`;
   ctx.fillStyle = config.textColor;
-  ctx.globalAlpha = 0.5;
-  const x = width - margin;
-  const y = config.numbering.position === 'top-right' ? margin + 50 : height - margin;
+  ctx.globalAlpha = 0.45;
   ctx.textAlign = 'right';
-  ctx.fillText(text, x, y);
+  ctx.fillText(text, width - margin, height - margin);
   ctx.globalAlpha = 1.0;
 };
