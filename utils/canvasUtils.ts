@@ -256,61 +256,67 @@ const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, he
   const f = config.finalSlide;
   const textColor = config.textColor;
   const activeFont = config.fontPair.body;
+  const headerFont = config.fontPair.header;
+  const maxWidth = width - margin * 2;
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   
-  const mainY = height * 0.42;
+  // Higher center to avoid collision with branding
+  const mainY = height * 0.38;
   
-  ctx.font = `400 ${width * 0.045}px "${activeFont}"`;
-  ctx.fillStyle = textColor;
-  ctx.fillText(f.textBefore, width / 2, mainY - 140);
+  // 1. Text Before
+  const fontSizeBefore = width * 0.045;
+  ctx.font = `400 ${fontSizeBefore}px "${activeFont}"`;
+  const beforeLayout = getWrappedLines(ctx, f.textBefore, maxWidth, fontSizeBefore, activeFont, 1.3);
+  let curBeforeY = mainY - 140 - beforeLayout.totalHeight / 2;
+  beforeLayout.lines.forEach(l => {
+    ctx.fillStyle = textColor;
+    ctx.fillText(l.parts.map(p => p.text).join(''), width / 2, curBeforeY);
+    curBeforeY += fontSizeBefore * 1.3;
+  });
 
-  ctx.font = `900 ${width * 0.08}px "${config.fontPair.header}"`;
-  const metrics = ctx.measureText(f.codeWord);
+  // 2. Code Word
+  ctx.font = `900 ${width * 0.08}px "${headerFont}"`;
+  const codeWord = f.codeWord.toUpperCase();
+  const metrics = ctx.measureText(codeWord);
   const paddingH = 70, rectH = width * 0.13;
-  const rectW = Math.min(metrics.width + paddingH * 2, width - margin * 2);
+  const rectW = Math.min(metrics.width + paddingH * 2, maxWidth);
 
   ctx.strokeStyle = textColor; ctx.lineWidth = 5;
   ctx.beginPath();
   ctx.roundRect(width/2 - rectW/2, mainY - rectH/2, rectW, rectH, rectH/2);
   ctx.stroke();
-  ctx.fillText(f.codeWord, width/2, mainY);
+  ctx.fillText(codeWord, width/2, mainY);
 
-  ctx.font = `400 ${width * 0.045}px "${activeFont}"`;
-  ctx.fillText(f.textAfter, width / 2, mainY + 140);
+  // 3. Text After
+  const fontSizeAfter = width * 0.045;
+  ctx.font = `400 ${fontSizeAfter}px "${activeFont}"`;
+  const afterLayout = getWrappedLines(ctx, f.textAfter, maxWidth, fontSizeAfter, activeFont, 1.3);
+  let curAfterY = mainY + 140 - afterLayout.totalHeight / 2;
+  afterLayout.lines.forEach(l => {
+    ctx.fillStyle = textColor;
+    ctx.fillText(l.parts.map(p => p.text).join(''), width / 2, curAfterY);
+    curAfterY += fontSizeAfter * 1.3;
+  });
 
-  const footerY = height - margin - 150;
-  let textXStart = margin + 170;
+  // 4. Improved Branding at the bottom
+  const footerY = height - margin - 110; // Anchored slightly lower
+  const avatarSize = 135;
+  const avatarX = margin;
+  const textXStart = avatarX + avatarSize + 35;
+  const textMaxWidth = width - textXStart - margin;
 
-  if (config.avatarUrl) {
-    try {
-      const img = new Image(); img.src = config.avatarUrl;
-      await new Promise((r, j) => { img.onload = r; img.onerror = j; });
-      const avatarSize = 135;
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(margin + 67, footerY, 67, 0, Math.PI * 2);
-      ctx.clip();
-      ctx.drawImage(img, margin, footerY - 67, avatarSize, avatarSize);
-      ctx.restore();
-    } catch (e) {}
-  }
-
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.font = `700 ${width * 0.05}px "${activeFont}"`;
-  ctx.fillText(config.nickname || '@account', textXStart, footerY - 30);
-  
-  ctx.font = `400 ${width * 0.038}px "${activeFont}"`;
+  const nickname = config.nickname || '@account';
   const desc = f.blogDescription || "подписывайся!";
   
-  const descLines = [];
+  ctx.font = `400 ${width * 0.038}px "${activeFont}"`;
+  const descLines: string[] = [];
   const words = desc.split(' ');
   let currentLine = '';
   for(let word of words) {
     const testLine = currentLine + (currentLine === '' ? '' : ' ') + word;
-    if (ctx.measureText(testLine).width < (width - textXStart - margin)) {
+    if (ctx.measureText(testLine).width < textMaxWidth) {
       currentLine = testLine;
     } else {
       descLines.push(currentLine);
@@ -318,9 +324,50 @@ const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, he
     }
   }
   descLines.push(currentLine);
+
+  const nickFontSize = width * 0.05;
+  const descFontSize = width * 0.038;
+  const descLineHeight = descFontSize * 1.3;
+  const totalTextH = nickFontSize + (descLines.length * descLineHeight) + 10;
   
+  // Center block vertically relative to avatar center
+  const avatarCenterY = footerY;
+  const textTopY = avatarCenterY - totalTextH / 2;
+
+  // Draw Avatar
+  if (config.avatarUrl) {
+    try {
+      const img = new Image(); img.src = config.avatarUrl;
+      await new Promise((r, j) => { img.onload = r; img.onerror = j; });
+      
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(avatarX + avatarSize/2, avatarCenterY, avatarSize/2, 0, Math.PI * 2);
+      ctx.clip();
+      
+      const aspect = img.width / img.height;
+      let drawW = avatarSize, drawH = avatarSize;
+      let drawX = avatarX, drawY = avatarCenterY - avatarSize/2;
+      
+      if (aspect > 1) { drawW = avatarSize * aspect; drawX = (avatarX + avatarSize/2) - drawW/2; }
+      else if (aspect < 1) { drawH = avatarSize / aspect; drawY = avatarCenterY - drawH/2; }
+      
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+      ctx.restore();
+    } catch (e) {}
+  }
+
+  // Draw Text aligned with blue lines style
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = textColor;
+  
+  ctx.font = `700 ${nickFontSize}px "${activeFont}"`;
+  ctx.fillText(nickname, textXStart, textTopY);
+  
+  ctx.font = `400 ${descFontSize}px "${activeFont}"`;
   descLines.forEach((line, i) => {
-    ctx.fillText(line, textXStart, footerY + 25 + (i * 45));
+    ctx.fillText(line, textXStart, textTopY + nickFontSize + 10 + (i * descLineHeight));
   });
 };
 
@@ -362,7 +409,14 @@ const drawBranding = async (ctx: CanvasRenderingContext2D, width: number, height
       ctx.beginPath();
       ctx.arc(finalAvatarX, y, avatarRadius, 0, Math.PI * 2);
       ctx.clip();
-      ctx.drawImage(img, finalAvatarX - avatarRadius, y - avatarRadius, avatarRadius * 2, avatarRadius * 2);
+      
+      const aspect = img.width / img.height;
+      let drawW = avatarRadius * 2, drawH = avatarRadius * 2;
+      let drawX = finalAvatarX - avatarRadius, drawY = y - avatarRadius;
+      if (aspect > 1) { drawW = avatarRadius * 2 * aspect; drawX = finalAvatarX - drawW/2; }
+      else if (aspect < 1) { drawH = avatarRadius * 2 / aspect; drawY = y - drawH/2; }
+
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
       ctx.restore();
       
       ctx.fillStyle = config.textColor;
