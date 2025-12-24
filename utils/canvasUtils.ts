@@ -262,14 +262,15 @@ const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, he
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   
-  // Higher center to avoid collision with branding
+  // Center anchor point for content
   const mainY = height * 0.38;
+  const spacingFromCodeWord = 180; // Larger vertical gap to prevent overlap
   
   // 1. Text Before
   const fontSizeBefore = width * 0.045;
   ctx.font = `400 ${fontSizeBefore}px "${activeFont}"`;
   const beforeLayout = getWrappedLines(ctx, f.textBefore, maxWidth, fontSizeBefore, activeFont, 1.3);
-  let curBeforeY = mainY - 140 - beforeLayout.totalHeight / 2;
+  let curBeforeY = mainY - spacingFromCodeWord - beforeLayout.totalHeight / 2;
   beforeLayout.lines.forEach(l => {
     ctx.fillStyle = textColor;
     ctx.fillText(l.parts.map(p => p.text).join(''), width / 2, curBeforeY);
@@ -293,7 +294,8 @@ const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, he
   const fontSizeAfter = width * 0.045;
   ctx.font = `400 ${fontSizeAfter}px "${activeFont}"`;
   const afterLayout = getWrappedLines(ctx, f.textAfter, maxWidth, fontSizeAfter, activeFont, 1.3);
-  let curAfterY = mainY + 140 - afterLayout.totalHeight / 2;
+  // Increase curAfterY to start well below the codeWord bubble
+  let curAfterY = mainY + spacingFromCodeWord - afterLayout.totalHeight / 2;
   afterLayout.lines.forEach(l => {
     ctx.fillStyle = textColor;
     ctx.fillText(l.parts.map(p => p.text).join(''), width / 2, curAfterY);
@@ -301,7 +303,7 @@ const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, he
   });
 
   // 4. Improved Branding at the bottom
-  const footerY = height - margin - 110; // Anchored slightly lower
+  const footerY = height - margin - 110; 
   const avatarSize = 135;
   const avatarX = margin;
   const textXStart = avatarX + avatarSize + 35;
@@ -330,7 +332,6 @@ const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, he
   const descLineHeight = descFontSize * 1.3;
   const totalTextH = nickFontSize + (descLines.length * descLineHeight) + 10;
   
-  // Center block vertically relative to avatar center
   const avatarCenterY = footerY;
   const textTopY = avatarCenterY - totalTextH / 2;
 
@@ -357,7 +358,7 @@ const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, he
     } catch (e) {}
   }
 
-  // Draw Text aligned with blue lines style
+  // Draw Text
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillStyle = textColor;

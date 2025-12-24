@@ -281,14 +281,14 @@ const App: React.FC = () => {
                    СКАЧАТЬ ZIP АРХИВ
                  </button>
                  <p className="text-[10px] text-zinc-500 text-center font-bold uppercase">Нажмите на слайд для мгновенного скачивания</p>
-                 <div className="grid grid-cols-3 gap-2 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
+                 <div className="grid grid-cols-2 gap-4 max-h-[400px] overflow-y-auto p-2 custom-scrollbar border border-zinc-900 rounded-2xl bg-black/50">
                     {slides.map(s => (
-                      <button key={s.id} onClick={() => downloadOne(s.id)} className="aspect-[4/5] bg-zinc-900 rounded-lg overflow-hidden border border-zinc-800 hover:border-white transition-all">
+                      <button key={s.id} onClick={() => downloadOne(s.id)} className="aspect-[4/5] bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 hover:border-white transition-all transform active:scale-95">
                         <SlidePreview slide={s} total={config.finalSlide.enabled ? slides.length + 1 : slides.length} config={config} />
                       </button>
                     ))}
                     {config.finalSlide.enabled && (
-                      <button onClick={() => downloadOne('final')} className="aspect-[4/5] bg-white/5 rounded-lg overflow-hidden border border-white/20 hover:border-white transition-all">
+                      <button onClick={() => downloadOne('final')} className="aspect-[4/5] bg-white/5 rounded-xl overflow-hidden border border-white/10 hover:border-white transition-all transform active:scale-95">
                          <SlidePreview slide={null} total={slides.length + 1} config={config} isFinal={true} />
                       </button>
                     )}
@@ -308,7 +308,7 @@ const App: React.FC = () => {
         <div className="fixed bottom-0 left-0 w-full lg:w-[500px] p-6 border-t border-zinc-900 bg-black/90 backdrop-blur-md z-50 flex items-center gap-3">
            <button disabled={step === 1} onClick={() => setStep(s => s - 1)} className="w-14 h-14 bg-zinc-900 border border-zinc-800 rounded-2xl flex items-center justify-center disabled:opacity-20 active:scale-90 transition-all text-white"><ChevronLeft size={22}/></button>
            {step === 7 ? (
-             <button onClick={resetAll} className="flex-1 h-14 bg-zinc-800 border border-zinc-700 text-white rounded-2xl font-black uppercase flex items-center justify-center gap-2 active:scale-95 transition-all text-white"><RefreshCw size={18}/> НОВЫЙ ПРОСТ</button>
+             <button onClick={resetAll} className="flex-1 h-14 bg-zinc-800 border border-zinc-700 text-white rounded-2xl font-black uppercase flex items-center justify-center gap-2 active:scale-95 transition-all text-white"><RefreshCw size={18}/> НОВЫЙ ПОСТ</button>
            ) : (
              <button onClick={() => setStep(s => s + 1)} className="flex-1 h-14 bg-white text-black rounded-2xl font-black uppercase flex items-center justify-center gap-2 active:scale-95 transition-all text-black">ВПЕРЕД <ChevronRight size={18}/></button>
            )}
