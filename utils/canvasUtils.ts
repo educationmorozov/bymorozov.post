@@ -160,6 +160,7 @@ export const renderSlideToCanvas = async (
     }
 
     const activeFont = isFirst ? config.fontPair.header : config.fontPair.body;
+    const headerFont = config.fontPair.header;
     const bodyFont = config.fontPair.body;
     const lineHeightScale = config.fontSizes.lineHeight;
     
@@ -167,26 +168,59 @@ export const renderSlideToCanvas = async (
     const minFontSize = 30;
     
     if (headerText) {
-      const headSize = baseFontSize * 1.35;
-      ctx.font = `700 ${headSize}px "${config.fontPair.header}"`;
-      const headLayout = getWrappedLines(ctx, headerText, maxWidth, headSize, config.fontPair.header, 1.25);
-      const bodyLayout = getWrappedLines(ctx, textToRender, maxWidth, baseFontSize, bodyFont, lineHeightScale, config.format);
-      
-      const totalH = headLayout.totalHeight + 50 + bodyLayout.totalHeight;
+      // Logic for POINT_EXPLAIN: Combined scaling
+      let finalHeadLayout: any = null;
+      let finalBodyLayout: any = null;
+      let currentFontSize = baseFontSize;
+
+      while (currentFontSize >= minFontSize) {
+        const headSize = currentFontSize * 1.3;
+        const headLayout = getWrappedLines(ctx, headerText, maxWidth, headSize, headerFont, 1.25);
+        const bodyLayout = getWrappedLines(ctx, textToRender, maxWidth, currentFontSize, bodyFont, lineHeightScale, config.format);
+        
+        const totalH = headLayout.totalHeight + 50 + bodyLayout.totalHeight;
+        if (totalH <= height - safeMargin * 3) {
+          finalHeadLayout = headLayout;
+          finalBodyLayout = bodyLayout;
+          baseFontSize = currentFontSize;
+          break;
+        }
+        currentFontSize -= 2;
+      }
+
+      if (!finalHeadLayout) {
+        finalHeadLayout = getWrappedLines(ctx, headerText, maxWidth, minFontSize * 1.3, headerFont, 1.25);
+        finalBodyLayout = getWrappedLines(ctx, textToRender, maxWidth, minFontSize, bodyFont, lineHeightScale, config.format);
+        baseFontSize = minFontSize;
+      }
+
+      const headSize = baseFontSize * 1.3;
+      const totalH = finalHeadLayout.totalHeight + 50 + finalBodyLayout.totalHeight;
       let curY = (height * config.fontSizes.verticalOffset / 100) - (totalH / 2);
 
-      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-      headLayout.lines.forEach(l => {
+      ctx.textBaseline = 'top';
+      finalHeadLayout.lines.forEach(l => {
+        ctx.font = `700 ${headSize}px "${headerFont}"`;
         ctx.fillStyle = config.textColor;
-        ctx.fillText(l.parts.map(p => p.text).join(''), width / 2, curY);
-        curY += headSize * 1.25;
-      });
-      curY += 50;
-      
-      bodyLayout.lines.forEach(l => {
         let lx = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
         if (config.alignment === Alignment.CENTER) {
           ctx.textAlign = 'center';
+          ctx.fillText(l.parts.map(p => p.text).join(''), lx, curY);
+        } else {
+          ctx.textAlign = 'left';
+          ctx.fillText(l.parts.map(p => p.text).join(''), lx, curY);
+        }
+        curY += headSize * 1.25;
+      });
+
+      curY += 50;
+      
+      finalBodyLayout.lines.forEach(l => {
+        let lx = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
+        if (config.alignment === Alignment.CENTER) {
+          ctx.font = `400 ${baseFontSize}px "${bodyFont}"`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = config.textColor;
           ctx.fillText(l.parts.map(p => p.text).join(''), lx, curY);
         } else {
           ctx.textAlign = 'left';
@@ -199,7 +233,6 @@ export const renderSlideToCanvas = async (
           });
         }
         curY += baseFontSize * lineHeightScale;
-        if (l.isParagraphEnd && config.format === SlideFormat.PLAN) curY += baseFontSize * (lineHeightScale - 1);
       });
     } else {
       let finalLayout: any = null;
@@ -262,47 +295,50 @@ const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, he
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   
-  // Adjusted Y center to allow more vertical space
   const mainY = height * 0.35;
-  const codeWordPaddingV = 180; // Gap between code word and text above/below
+  const codeWordSpacing = 220; 
   
   // 1. Text Before
   const fontSizeBefore = width * 0.045;
   ctx.font = `400 ${fontSizeBefore}px "${activeFont}"`;
   const beforeLayout = getWrappedLines(ctx, f.textBefore, maxWidth, fontSizeBefore, activeFont, 1.3);
-  let curBeforeY = mainY - codeWordPaddingV - beforeLayout.totalHeight / 2;
+  let curBeforeY = mainY - codeWordSpacing - beforeLayout.totalHeight / 2;
   beforeLayout.lines.forEach(l => {
     ctx.fillStyle = textColor;
     ctx.fillText(l.parts.map(p => p.text).join(''), width / 2, curBeforeY);
     curBeforeY += fontSizeBefore * 1.3;
   });
 
-  // 2. Code Word
-  ctx.font = `900 ${width * 0.08}px "${headerFont}"`;
+  // 2. Code Word (Enhanced spacing to avoid font overlap)
+  const codeWordFontSize = width * 0.08;
+  ctx.font = `900 ${codeWordFontSize}px "${headerFont}"`;
   const codeWord = f.codeWord.toUpperCase();
   const metrics = ctx.measureText(codeWord);
-  const paddingH = 70, rectH = width * 0.13;
+  
+  const paddingH = 100; 
+  const rectH = width * 0.2; // Even more height for safety
   const rectW = Math.min(metrics.width + paddingH * 2, maxWidth);
 
-  ctx.strokeStyle = textColor; ctx.lineWidth = 5;
+  ctx.strokeStyle = textColor; ctx.lineWidth = 7;
   ctx.beginPath();
   ctx.roundRect(width/2 - rectW/2, mainY - rectH/2, rectW, rectH, rectH/2);
   ctx.stroke();
+  
+  ctx.textBaseline = 'middle';
   ctx.fillText(codeWord, width/2, mainY);
 
-  // 3. Text After (Significant gap added to prevent overlap)
+  // 3. Text After
   const fontSizeAfter = width * 0.045;
   ctx.font = `400 ${fontSizeAfter}px "${activeFont}"`;
   const afterLayout = getWrappedLines(ctx, f.textAfter, maxWidth, fontSizeAfter, activeFont, 1.3);
-  // Using explicit extra spacing after the codeWord box
-  let curAfterY = mainY + codeWordPaddingV - afterLayout.totalHeight / 2;
+  let curAfterY = mainY + codeWordSpacing - afterLayout.totalHeight / 2;
   afterLayout.lines.forEach(l => {
     ctx.fillStyle = textColor;
     ctx.fillText(l.parts.map(p => p.text).join(''), width / 2, curAfterY);
     curAfterY += fontSizeAfter * 1.3;
   });
 
-  // 4. Branding at the bottom (Centered Branding)
+  // 4. Branding
   const footerY = height - margin - 100; 
   const avatarSize = 135;
   const avatarX = margin;
@@ -335,37 +371,29 @@ const renderFinalSlide = async (ctx: CanvasRenderingContext2D, width: number, he
   const avatarCenterY = footerY;
   const textTopY = avatarCenterY - totalTextH / 2;
 
-  // Draw Avatar
   if (config.avatarUrl) {
     try {
       const img = new Image(); img.src = config.avatarUrl;
       await new Promise((r, j) => { img.onload = r; img.onerror = j; });
-      
       ctx.save();
       ctx.beginPath();
       ctx.arc(avatarX + avatarSize/2, avatarCenterY, avatarSize/2, 0, Math.PI * 2);
       ctx.clip();
-      
       const aspect = img.width / img.height;
       let drawW = avatarSize, drawH = avatarSize;
       let drawX = avatarX, drawY = avatarCenterY - avatarSize/2;
-      
       if (aspect > 1) { drawW = avatarSize * aspect; drawX = (avatarX + avatarSize/2) - drawW/2; }
       else if (aspect < 1) { drawH = avatarSize / aspect; drawY = avatarCenterY - drawH/2; }
-      
       ctx.drawImage(img, drawX, drawY, drawW, drawH);
       ctx.restore();
     } catch (e) {}
   }
 
-  // Draw Text aligned
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillStyle = textColor;
-  
   ctx.font = `700 ${nickFontSize}px "${activeFont}"`;
   ctx.fillText(nickname, textXStart, textTopY);
-  
   ctx.font = `400 ${descFontSize}px "${activeFont}"`;
   descLines.forEach((line, i) => {
     ctx.fillText(line, textXStart, textTopY + nickFontSize + 12 + (i * descLineHeight));
@@ -395,7 +423,6 @@ const drawBranding = async (ctx: CanvasRenderingContext2D, width: number, height
     try {
       const img = new Image(); img.src = config.avatarUrl;
       await new Promise((r, j) => { img.onload = r; img.onerror = j; });
-      
       let finalAvatarX = x;
       if (ctx.textAlign === 'center') {
         const totalW = avatarRadius * 2 + spacing + nickWidth;
@@ -405,21 +432,17 @@ const drawBranding = async (ctx: CanvasRenderingContext2D, width: number, height
       } else {
         finalAvatarX = x + avatarRadius;
       }
-
       ctx.save();
       ctx.beginPath();
       ctx.arc(finalAvatarX, y, avatarRadius, 0, Math.PI * 2);
       ctx.clip();
-      
       const aspect = img.width / img.height;
       let drawW = avatarRadius * 2, drawH = avatarRadius * 2;
       let drawX = finalAvatarX - avatarRadius, drawY = y - avatarRadius;
       if (aspect > 1) { drawW = avatarRadius * 2 * aspect; drawX = finalAvatarX - drawW/2; }
       else if (aspect < 1) { drawH = avatarRadius * 2 / aspect; drawY = y - drawH/2; }
-
       ctx.drawImage(img, drawX, drawY, drawW, drawH);
       ctx.restore();
-      
       ctx.fillStyle = config.textColor;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';

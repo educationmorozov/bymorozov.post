@@ -79,6 +79,14 @@ const App: React.FC = () => {
     setConfig(c => ({ ...c, finalSlide: { ...c.finalSlide, codeWord: val.toUpperCase() } }));
   };
 
+  const handleFormatChange = (f: SlideFormat) => {
+    setConfig(c => ({
+      ...c, 
+      format: f,
+      alignment: f === SlideFormat.POINT_EXPLAIN ? Alignment.LEFT : c.alignment
+    }));
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'bg') => {
     const file = e.target.files?.[0];
     if (file) {
@@ -167,7 +175,7 @@ const App: React.FC = () => {
                 <h2 className="text-xl font-bold uppercase tracking-tight">ШАГ 2: выберите формат</h2>
                 <div className="grid grid-cols-2 gap-2">
                   {Object.values(SlideFormat).map(f => (
-                    <button key={f} onClick={() => setConfig(c => ({...c, format: f}))} className={`p-4 rounded-xl border text-xs font-bold text-left h-20 transition-all ${config.format === f ? 'bg-white text-black border-white' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}>{f}</button>
+                    <button key={f} onClick={() => handleFormatChange(f)} className={`p-4 rounded-xl border text-xs font-bold text-left h-20 transition-all ${config.format === f ? 'bg-white text-black border-white' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}>{f}</button>
                   ))}
                 </div>
               </div>
@@ -281,7 +289,7 @@ const App: React.FC = () => {
                    СКАЧАТЬ ZIP АРХИВ
                  </button>
                  <p className="text-[10px] text-zinc-500 text-center font-bold uppercase">Нажмите на слайд для мгновенного скачивания</p>
-                 <div className="grid grid-cols-3 gap-2 max-h-[450px] overflow-y-auto p-2 custom-scrollbar border border-zinc-900 rounded-2xl bg-black/50">
+                 <div className="grid grid-cols-3 gap-x-2 gap-y-16 max-h-[480px] overflow-y-auto p-4 custom-scrollbar border border-zinc-900 rounded-2xl bg-black/50">
                     {slides.map(s => (
                       <button key={s.id} onClick={() => downloadOne(s.id)} className="aspect-[4/5] bg-zinc-900 rounded-lg overflow-hidden border border-zinc-800 hover:border-white transition-all transform active:scale-95 shadow-lg">
                         <SlidePreview slide={s} total={config.finalSlide.enabled ? slides.length + 1 : slides.length} config={config} />
