@@ -29,7 +29,15 @@ export enum SlideFormat {
   NORMAL = 'Обычный пост',
   PLAN = 'Пост-план',
   LIST = 'Пост-список',
-  POINT_EXPLAIN = 'Пункт + пояснение'
+  POINT_EXPLAIN = 'Пункт + пояснение',
+  PERSONAL = 'Личный пост'
+}
+
+export enum OverlayType {
+  FULL = 'Полное',
+  TOP = 'Сверху',
+  BOTTOM = 'Снизу',
+  BOTH = 'Сверху и снизу'
 }
 
 export interface FinalSlideConfig {
@@ -75,10 +83,28 @@ export interface DesignConfig {
     lineHeight: number;
     verticalOffset: number; // 0-100
   };
+  textBackground: {
+    enabledFirst: boolean;
+    enabledMiddle: boolean;
+    color: string;
+    opacity: number; // 0-100
+    borderRadius: number; // 0-100
+    padding: number; // 0-100
+  };
   finalSlide: FinalSlideConfig;
+}
+
+export interface SlideParagraph {
+  text: string;
+  verticalOffset: number; // 0-100
 }
 
 export interface SlideData {
   id: number;
   text: string;
+  paragraphs?: SlideParagraph[];
+  bgImageUrl?: string | null;
+  overlayType?: OverlayType;
+  overlayIntensity?: number; // 0-100
+  overlayOffset?: number; // 0-100
 }

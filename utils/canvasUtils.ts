@@ -1,5 +1,5 @@
 
-import { SlideData, DesignConfig, Alignment, NickPosition, AspectRatio, SlideFormat } from '../types.ts';
+import { SlideData, DesignConfig, Alignment, NickPosition, AspectRatio, SlideFormat, OverlayType } from '../types.ts';
 
 export const saveBlob = (blob: Blob, fileName: string) => {
   const url = URL.createObjectURL(blob);
@@ -127,14 +127,17 @@ export const renderSlideToCanvas = async (
   ctx.fillStyle = config.customColor;
   ctx.fillRect(0, 0, width, height);
 
-  if (config.bgImageUrl) {
+  const bgUrl = slide?.bgImageUrl || config.bgImageUrl;
+  const overlayType = slide?.overlayType || OverlayType.FULL;
+  const overlayIntensity = (slide?.overlayIntensity ?? 45) / 100;
+
+  if (bgUrl) {
     try {
       const img = new Image();
-      img.src = config.bgImageUrl;
+      img.src = bgUrl;
       await new Promise((r, j) => { img.onload = r; img.onerror = j; });
       
       ctx.save();
-      ctx.globalAlpha = 0.45;
       
       // Object-fit Cover logic
       const scale = Math.max(width / img.width, height / img.height);
@@ -143,8 +146,40 @@ export const renderSlideToCanvas = async (
       ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
       
       ctx.restore();
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      ctx.fillRect(0, 0, width, height);
+
+      // Apply Overlay
+      if (overlayType === OverlayType.FULL) {
+        ctx.fillStyle = `rgba(0,0,0,${overlayIntensity})`;
+        ctx.fillRect(0, 0, width, height);
+      } else if (overlayType === OverlayType.TOP) {
+        const offset = (slide?.overlayOffset ?? 50) / 100;
+        const grad = ctx.createLinearGradient(0, 0, 0, height * offset * 1.4);
+        grad.addColorStop(0, `rgba(0,0,0,${overlayIntensity})`);
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, height);
+      } else if (overlayType === OverlayType.BOTTOM) {
+        const offset = (slide?.overlayOffset ?? 50) / 100;
+        const grad = ctx.createLinearGradient(0, height * (1 - offset * 1.4), 0, height);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(1, `rgba(0,0,0,${overlayIntensity})`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, height);
+      } else if (overlayType === OverlayType.BOTH) {
+        // Top gradient
+        const gradTop = ctx.createLinearGradient(0, 0, 0, height * 0.4);
+        gradTop.addColorStop(0, `rgba(0,0,0,${overlayIntensity})`);
+        gradTop.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = gradTop;
+        ctx.fillRect(0, 0, width, height * 0.5);
+        
+        // Bottom gradient
+        const gradBottom = ctx.createLinearGradient(0, height * 0.6, 0, height);
+        gradBottom.addColorStop(0, 'rgba(0,0,0,0)');
+        gradBottom.addColorStop(1, `rgba(0,0,0,${overlayIntensity})`);
+        ctx.fillStyle = gradBottom;
+        ctx.fillRect(0, height * 0.5, width, height * 0.5);
+      }
     } catch (e) {}
   }
 
@@ -154,6 +189,21 @@ export const renderSlideToCanvas = async (
     const isFirst = slide.id === 1;
     let textToRender = slide.text;
     let headerText = '';
+
+    // Branding Avoidance Logic
+    const brandingHeight = 180; // Approximate height needed for branding
+    let topAvoidance = 0;
+    let bottomAvoidance = 0;
+
+    if (config.nickPosition.startsWith('Вверху')) {
+      topAvoidance = brandingHeight;
+    } else if (config.nickPosition.startsWith('Внизу')) {
+      bottomAvoidance = brandingHeight;
+    }
+
+    const availableHeight = height - (safeMargin * 2) - topAvoidance - bottomAvoidance;
+    const textStartYLimit = safeMargin + topAvoidance;
+    const textEndYLimit = height - safeMargin - bottomAvoidance;
 
     if (config.format === SlideFormat.POINT_EXPLAIN) {
       const firstDelimiter = slide.text.search(/[.!\n]/);
@@ -187,11 +237,13 @@ export const renderSlideToCanvas = async (
     const headerFont = config.fontPair.header;
     const bodyFont = config.fontPair.body;
     const lineHeightScale = config.fontSizes.lineHeight;
+    const isBgEnabled = isFirst ? config.textBackground.enabledFirst : config.textBackground.enabledMiddle;
     
     let baseFontSize = isFirst ? config.fontSizes.first : config.fontSizes.middle;
     const minFontSize = 30;
     
     if (headerText) {
+      // POINT_EXPLAIN format logic remains mostly same but we could apply background
       let finalHeadLayout: any = null;
       let finalBodyLayout: any = null;
       let currentFontSize = baseFontSize;
@@ -202,7 +254,7 @@ export const renderSlideToCanvas = async (
         const bodyLayout = getWrappedLines(ctx, textToRender, maxWidth, currentFontSize, bodyFont, lineHeightScale, config.format);
         
         const totalH = headLayout.totalHeight + 50 + bodyLayout.totalHeight;
-        if (totalH <= height - safeMargin * 3) {
+        if (totalH <= availableHeight) {
           finalHeadLayout = headLayout;
           finalBodyLayout = bodyLayout;
           baseFontSize = currentFontSize;
@@ -219,7 +271,22 @@ export const renderSlideToCanvas = async (
 
       const headSize = baseFontSize * 1.3;
       const totalH = finalHeadLayout.totalHeight + 50 + finalBodyLayout.totalHeight;
-      let curY = (height * config.fontSizes.verticalOffset / 100) - (totalH / 2);
+      const startY = Math.max(textStartYLimit, Math.min(textEndYLimit - totalH, (height * config.fontSizes.verticalOffset / 100) - (totalH / 2)));
+      let curY = startY;
+
+      if (isBgEnabled) {
+        const bg = config.textBackground;
+        const padding = bg.padding;
+        const radius = bg.borderRadius;
+        // Convert hex to rgba with opacity
+        const r = parseInt(bg.color.slice(1, 3), 16);
+        const g = parseInt(bg.color.slice(3, 5), 16);
+        const b = parseInt(bg.color.slice(5, 7), 16);
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${bg.opacity / 100})`;
+        ctx.beginPath();
+        ctx.roundRect(safeMargin - padding, startY - padding, maxWidth + padding * 2, totalH + padding * 2, radius);
+        ctx.fill();
+      }
 
       ctx.textBaseline = 'top';
       finalHeadLayout.lines.forEach(l => {
@@ -257,11 +324,59 @@ export const renderSlideToCanvas = async (
         }
         curY += baseFontSize * lineHeightScale;
       });
+    } else if (slide.paragraphs && slide.paragraphs.length > 0) {
+      // Individual Paragraph Positioning
+      slide.paragraphs.forEach(para => {
+        let currentFontSize = baseFontSize;
+        let layout = getWrappedLines(ctx, para.text, maxWidth, currentFontSize, activeFont, lineHeightScale, config.format);
+        
+        while (layout.totalHeight > height * 0.4 && currentFontSize > minFontSize) {
+          currentFontSize -= 2;
+          layout = getWrappedLines(ctx, para.text, maxWidth, currentFontSize, activeFont, lineHeightScale, config.format);
+        }
+
+        const py = Math.max(textStartYLimit, Math.min(textEndYLimit - layout.totalHeight, (height * para.verticalOffset / 100) - (layout.totalHeight / 2)));
+        
+        if (isBgEnabled) {
+          const bg = config.textBackground;
+          const padding = bg.padding;
+          const radius = bg.borderRadius;
+          const r = parseInt(bg.color.slice(1, 3), 16);
+          const g = parseInt(bg.color.slice(3, 5), 16);
+          const b = parseInt(bg.color.slice(5, 7), 16);
+          ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${bg.opacity / 100})`;
+          ctx.beginPath();
+          ctx.roundRect(safeMargin - padding, py - padding, maxWidth + padding * 2, layout.totalHeight + padding * 2, radius);
+          ctx.fill();
+        }
+
+        ctx.textBaseline = 'top';
+        let lineY = py;
+        layout.lines.forEach((line: any) => {
+          let x = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
+          if (config.alignment === Alignment.CENTER) {
+            ctx.textAlign = 'center';
+            ctx.fillStyle = config.textColor;
+            ctx.font = `400 ${currentFontSize}px "${activeFont}"`;
+            ctx.fillText(line.parts.map((p: any) => p.text).join(''), x, lineY);
+          } else {
+            ctx.textAlign = 'left';
+            let tempX = x;
+            line.parts.forEach((p: any) => {
+              ctx.font = `${p.bold ? '700' : '400'} ${currentFontSize}px "${activeFont}"`;
+              ctx.fillStyle = p.color || config.textColor;
+              ctx.fillText(p.text, tempX, lineY);
+              tempX += ctx.measureText(p.text).width;
+            });
+          }
+          lineY += currentFontSize * lineHeightScale;
+        });
+      });
     } else {
       let finalLayout: any = null;
       while (baseFontSize >= minFontSize) {
         const layout = getWrappedLines(ctx, textToRender, maxWidth, baseFontSize, activeFont, lineHeightScale, config.format);
-        if (layout.totalHeight <= height - safeMargin * 3) {
+        if (layout.totalHeight <= availableHeight) {
           finalLayout = layout;
           break;
         }
@@ -270,7 +385,21 @@ export const renderSlideToCanvas = async (
       if (!finalLayout) finalLayout = getWrappedLines(ctx, textToRender, maxWidth, minFontSize, activeFont, lineHeightScale, config.format);
 
       const lineHeight = baseFontSize * lineHeightScale;
-      let y = (height * config.fontSizes.verticalOffset / 100) - (finalLayout.totalHeight / 2);
+      const startY = Math.max(textStartYLimit, Math.min(textEndYLimit - finalLayout.totalHeight, (height * config.fontSizes.verticalOffset / 100) - (finalLayout.totalHeight / 2)));
+      let y = startY;
+
+      if (isBgEnabled) {
+        const bg = config.textBackground;
+        const padding = bg.padding;
+        const radius = bg.borderRadius;
+        const r = parseInt(bg.color.slice(1, 3), 16);
+        const g = parseInt(bg.color.slice(3, 5), 16);
+        const b = parseInt(bg.color.slice(5, 7), 16);
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${bg.opacity / 100})`;
+        ctx.beginPath();
+        ctx.roundRect(safeMargin - padding, startY - padding, maxWidth + padding * 2, finalLayout.totalHeight + padding * 2, radius);
+        ctx.fill();
+      }
 
       ctx.textBaseline = 'top';
       finalLayout.lines.forEach((line: any) => {

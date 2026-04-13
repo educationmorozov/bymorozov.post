@@ -4,8 +4,9 @@ import {
   ChevronRight, ChevronLeft, Download, ImageIcon, Upload, Eye, RefreshCw, AlignLeft, AlignCenter, AlignJustify, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Camera, Home, Search, Play, User, BarChart2, Zap
 } from 'lucide-react';
 import JSZip from 'jszip';
+import heic2any from 'heic2any';
 import { 
-  SplitType, AspectRatio, NickPosition, SlideData, DesignConfig, Alignment, SlideFormat 
+  SplitType, AspectRatio, NickPosition, SlideData, DesignConfig, Alignment, SlideFormat, OverlayType 
 } from './types.ts';
 import { renderSlideToCanvas, saveBlob } from './utils/canvasUtils.ts';
 
@@ -49,6 +50,7 @@ const App: React.FC = () => {
     numbering: { enabled: true, position: 'bottom-right' },
     sizes: { first: AspectRatio.PORTRAIT, middle: AspectRatio.PORTRAIT, last: AspectRatio.PORTRAIT },
     fontSizes: { first: 64, middle: 64, last: 64, lineHeight: 1.35, verticalOffset: 50 },
+    textBackground: { enabledFirst: false, enabledMiddle: false, color: '#000000', opacity: 50, borderRadius: 20, padding: 30 },
     finalSlide: { enabled: true, textBefore: 'Забирай подарок', codeWord: 'АКСЕЛЕРАТОР', textAfter: 'в директ', blogDescription: '', codeWordY: 50, avatarY: 85, codeWordVerticalOffset: 35 }
   });
 
@@ -60,7 +62,32 @@ const App: React.FC = () => {
     else if (config.splitType === SplitType.DASHES) raw = inputText.split(/-{3,}/); // 3 or more dashes
     else raw = inputText.split(/Слайд \d+:|Слайд \d+/i);
     const filtered = raw.map(s => s.trim()).filter(s => s.length > 0).slice(0, 20);
-    setSlides(filtered.map((text, i) => ({ id: i + 1, text })));
+    
+    setSlides(prev => {
+      return filtered.map((text, i) => {
+        const existing = prev.find(p => p.id === i + 1);
+        const lines = text.split('\n').filter(l => l.trim().length > 0);
+        
+        // If paragraphs already exist and text hasn't changed much, try to preserve offsets
+        const paragraphs = lines.map((line, lIdx) => {
+          const existingPara = existing?.paragraphs?.[lIdx];
+          return {
+            text: line,
+            verticalOffset: existingPara?.verticalOffset ?? (lines.length > 1 ? (20 + (60 / (lines.length - 1)) * lIdx) : 50)
+          };
+        });
+
+        return { 
+          id: i + 1, 
+          text,
+          paragraphs,
+          bgImageUrl: existing?.bgImageUrl || null,
+          overlayType: existing?.overlayType || OverlayType.FULL,
+          overlayIntensity: existing?.overlayIntensity ?? 45,
+          overlayOffset: existing?.overlayOffset ?? 50
+        };
+      });
+    });
   }, [inputText, config.splitType]);
 
   useEffect(() => { parseSlides(); }, [inputText, config.splitType]);
@@ -87,9 +114,17 @@ const App: React.FC = () => {
     }));
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'bg') => {
-    const file = e.target.files?.[0];
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'bg') => {
+    let file = e.target.files?.[0];
     if (file) {
+      if (file.name.toLowerCase().endsWith('.heic') || file.type === 'image/heic') {
+        try {
+          const convertedBlob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.8 });
+          file = new File([Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' });
+        } catch (err) {
+          console.error("HEIC conversion failed:", err);
+        }
+      }
       const reader = new FileReader();
       reader.onloadend = () => {
         if (type === 'avatar') setConfig(c => ({ ...c, avatarUrl: reader.result as string }));
@@ -184,23 +219,121 @@ const App: React.FC = () => {
             {step === 3 && (
               <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
                 <h2 className="text-xl font-bold uppercase tracking-tight">ШАГ 3: цвета и фон</h2>
-                <div className="grid grid-cols-2 gap-2">
-                  {PRESETS.map(p => (
-                    <button key={p.name} onClick={() => {setConfig(c => ({...c, customColor: p.bg, textColor: p.text})); setShowCustomColor(false);}} className="p-4 rounded-xl border border-zinc-800 text-left h-20 flex flex-col justify-end transition-all" style={{backgroundColor: p.bg}}>
-                      <span className="text-[10px] font-bold" style={{color: p.text}}>{p.name}</span>
-                    </button>
-                  ))}
-                  <button onClick={() => setShowCustomColor(!showCustomColor)} className={`p-4 rounded-xl border h-20 text-[10px] font-bold uppercase transition-all ${showCustomColor ? 'bg-white text-black border-white' : 'bg-zinc-900 border-zinc-800'}`}>Свой цвет</button>
-                  <label className="p-4 rounded-xl border border-zinc-800 h-20 flex items-center justify-center cursor-pointer hover:bg-zinc-900 bg-zinc-900 transition-all">
-                    <span className="text-[10px] font-bold uppercase">Свое фото</span>
-                    <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'bg')} />
-                  </label>
-                </div>
-                {showCustomColor && (
-                  <div className="grid grid-cols-2 gap-4 p-4 bg-zinc-900 rounded-xl border border-zinc-800 animate-in fade-in">
-                    <div className="space-y-1.5"><span className="text-[9px] text-zinc-500 font-bold uppercase">HEX Фона</span><input type="text" value={config.customColor} onChange={e => setConfig(c => ({...c, customColor: e.target.value}))} className="w-full bg-black border border-zinc-800 p-2 rounded text-[10px] font-mono text-white" placeholder="#000000" /></div>
-                    <div className="space-y-1.5"><span className="text-[9px] text-zinc-500 font-bold uppercase">HEX Текста</span><input type="text" value={config.textColor} onChange={e => setConfig(c => ({...c, textColor: e.target.value}))} className="w-full bg-black border border-zinc-800 p-2 rounded text-[10px] font-mono text-white" placeholder="#FFFFFF" /></div>
+                
+                {config.format === SlideFormat.PERSONAL ? (
+                  <div className="space-y-6">
+                    <p className="text-[11px] text-zinc-500 font-bold uppercase">Настройте фон для каждого слайда:</p>
+                    <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                      {slides.map((slide, idx) => (
+                        <div key={slide.id} className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold uppercase tracking-tighter text-zinc-400">Слайд {slide.id}</span>
+                              <label className="cursor-pointer bg-white text-black px-3 py-1 rounded-full text-[10px] font-black hover:bg-zinc-200 transition-all">
+                              {slide.bgImageUrl ? 'ИЗМЕНИТЬ ФОТО' : 'ВЫБРАТЬ ФОТО'}
+                              <input 
+                                type="file" 
+                                className="hidden" 
+                                onChange={async (e) => {
+                                  let file = e.target.files?.[0];
+                                  if (file) {
+                                    if (file.name.toLowerCase().endsWith('.heic') || file.type === 'image/heic') {
+                                      try {
+                                        const convertedBlob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.8 });
+                                        file = new File([Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' });
+                                      } catch (err) {
+                                        console.error("HEIC conversion failed:", err);
+                                      }
+                                    }
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, bgImageUrl: reader.result as string } : s));
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
+                                }} 
+                              />
+                            </label>
+                          </div>
+                          
+                          {slide.bgImageUrl && (
+                            <div className="space-y-3 animate-in fade-in">
+                              <div className="aspect-video w-full rounded-lg overflow-hidden border border-zinc-800">
+                                <img src={slide.bgImageUrl} className="w-full h-full object-cover" />
+                              </div>
+                              
+                              <div className="space-y-2">
+                                <span className="text-[9px] text-zinc-500 font-bold uppercase">Тип затемнения</span>
+                                <div className="grid grid-cols-2 gap-1">
+                                  {Object.values(OverlayType).map(ot => (
+                                    <button 
+                                      key={ot} 
+                                      onClick={() => setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, overlayType: ot } : s))}
+                                      className={`py-2 rounded-lg border text-[9px] font-bold transition-all ${slide.overlayType === ot ? 'bg-white text-black border-white' : 'bg-black border-zinc-800 text-zinc-500'}`}
+                                    >
+                                      {ot}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              
+                              <div className="space-y-1">
+                                <div className="flex justify-between">
+                                  <span className="text-[9px] text-zinc-500 font-bold uppercase">Интенсивность</span>
+                                  <span className="text-[9px] text-zinc-300 font-bold">{slide.overlayIntensity}%</span>
+                                </div>
+                                <input 
+                                  type="range" 
+                                  min="0" 
+                                  max="100" 
+                                  value={slide.overlayIntensity} 
+                                  onChange={(e) => setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, overlayIntensity: parseInt(e.target.value) } : s))}
+                                  className="w-full accent-white" 
+                                />
+                              </div>
+
+                              {(slide.overlayType === OverlayType.TOP || slide.overlayType === OverlayType.BOTTOM) && (
+                                <div className="space-y-1 animate-in slide-in-from-top-1">
+                                  <div className="flex justify-between">
+                                    <span className="text-[9px] text-zinc-500 font-bold uppercase">Граница затемнения</span>
+                                    <span className="text-[9px] text-zinc-300 font-bold">{slide.overlayOffset}%</span>
+                                  </div>
+                                  <input 
+                                    type="range" 
+                                    min="10" 
+                                    max="90" 
+                                    value={slide.overlayOffset} 
+                                    onChange={(e) => setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, overlayOffset: parseInt(e.target.value) } : s))}
+                                    className="w-full accent-white" 
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      {PRESETS.map(p => (
+                        <button key={p.name} onClick={() => {setConfig(c => ({...c, customColor: p.bg, textColor: p.text})); setShowCustomColor(false);}} className="p-4 rounded-xl border border-zinc-800 text-left h-20 flex flex-col justify-end transition-all" style={{backgroundColor: p.bg}}>
+                          <span className="text-[10px] font-bold" style={{color: p.text}}>{p.name}</span>
+                        </button>
+                      ))}
+                      <button onClick={() => setShowCustomColor(!showCustomColor)} className={`p-4 rounded-xl border h-20 text-[10px] font-bold uppercase transition-all ${showCustomColor ? 'bg-white text-black border-white' : 'bg-zinc-900 border-zinc-800'}`}>Свой цвет</button>
+                      <label className="p-4 rounded-xl border border-zinc-800 h-20 flex items-center justify-center cursor-pointer hover:bg-zinc-900 bg-zinc-900 transition-all">
+                        <span className="text-[10px] font-bold uppercase">Свое фото</span>
+                        <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'bg')} />
+                      </label>
+                    </div>
+                    {showCustomColor && (
+                      <div className="grid grid-cols-2 gap-4 p-4 bg-zinc-900 rounded-xl border border-zinc-800 animate-in fade-in">
+                        <div className="space-y-1.5"><span className="text-[9px] text-zinc-500 font-bold uppercase">HEX Фона</span><input type="text" value={config.customColor} onChange={e => setConfig(c => ({...c, customColor: e.target.value}))} className="w-full bg-black border border-zinc-800 p-2 rounded text-[10px] font-mono text-white" placeholder="#000000" /></div>
+                        <div className="space-y-1.5"><span className="text-[9px] text-zinc-500 font-bold uppercase">HEX Текста</span><input type="text" value={config.textColor} onChange={e => setConfig(c => ({...c, textColor: e.target.value}))} className="w-full bg-black border border-zinc-800 p-2 rounded text-[10px] font-mono text-white" placeholder="#FFFFFF" /></div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -237,6 +370,122 @@ const App: React.FC = () => {
                   </div>
                   <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Межстрочный интервал</span><input type="range" min="100" max="300" value={config.fontSizes.lineHeight * 100} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, lineHeight: parseInt(e.target.value) / 100}}))} className="w-full accent-white" /></div>
                   <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Смещение по вертикали</span><input type="range" min="20" max="80" value={config.fontSizes.verticalOffset} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, verticalOffset: parseInt(e.target.value)}}))} className="w-full accent-white" /></div>
+                </div>
+
+                <div className="pt-4 border-t border-zinc-900 space-y-4">
+                  <div className="space-y-3">
+                    <h3 className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Подложка под текст</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button 
+                        onClick={() => setConfig(c => ({...c, textBackground: {...c.textBackground, enabledFirst: !c.textBackground.enabledFirst}}))}
+                        className={`px-4 py-2.5 rounded-xl text-[9px] font-black transition-all border ${config.textBackground.enabledFirst ? 'bg-white text-black border-white' : 'bg-zinc-900 text-zinc-500 border-zinc-800'}`}
+                      >
+                        1 СЛАЙД: {config.textBackground.enabledFirst ? 'ВКЛ' : 'ВЫКЛ'}
+                      </button>
+                      <button 
+                        onClick={() => setConfig(c => ({...c, textBackground: {...c.textBackground, enabledMiddle: !c.textBackground.enabledMiddle}}))}
+                        className={`px-4 py-2.5 rounded-xl text-[9px] font-black transition-all border ${config.textBackground.enabledMiddle ? 'bg-white text-black border-white' : 'bg-zinc-900 text-zinc-500 border-zinc-800'}`}
+                      >
+                        ОСТАЛЬНЫЕ: {config.textBackground.enabledMiddle ? 'ВКЛ' : 'ВЫКЛ'}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {(config.textBackground.enabledFirst || config.textBackground.enabledMiddle) && (
+                    <div className="space-y-4 p-4 bg-zinc-900 rounded-xl border border-zinc-800 animate-in fade-in">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <span className="text-[9px] text-zinc-500 font-bold uppercase">Цвет подложки</span>
+                          <div className="flex gap-2">
+                            <input 
+                              type="color" 
+                              value={config.textBackground.color} 
+                              onChange={e => setConfig(c => ({...c, textBackground: {...c.textBackground, color: e.target.value}}))} 
+                              className="w-10 h-10 bg-black border border-zinc-800 rounded cursor-pointer" 
+                            />
+                            <input 
+                              type="text" 
+                              value={config.textBackground.color} 
+                              onChange={e => setConfig(c => ({...c, textBackground: {...c.textBackground, color: e.target.value}}))} 
+                              className="flex-1 bg-black border border-zinc-800 p-2 rounded text-[10px] font-mono text-white" 
+                              placeholder="#000000" 
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between">
+                            <span className="text-[9px] text-zinc-500 font-bold uppercase">Прозрачность</span>
+                            <span className="text-[9px] text-zinc-300 font-bold">{config.textBackground.opacity}%</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="100" 
+                            value={config.textBackground.opacity} 
+                            onChange={e => setConfig(c => ({...c, textBackground: {...c.textBackground, opacity: parseInt(e.target.value)}}))} 
+                            className="w-full accent-white h-10" 
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <span className="text-[9px] text-zinc-500 font-bold uppercase">Закругление</span>
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="100" 
+                            value={config.textBackground.borderRadius} 
+                            onChange={e => setConfig(c => ({...c, textBackground: {...c.textBackground, borderRadius: parseInt(e.target.value)}}))} 
+                            className="w-full accent-white" 
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <span className="text-[9px] text-zinc-500 font-bold uppercase">Отступы (Padding)</span>
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="100" 
+                            value={config.textBackground.padding} 
+                            onChange={e => setConfig(c => ({...c, textBackground: {...c.textBackground, padding: parseInt(e.target.value)}}))} 
+                            className="w-full accent-white" 
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-zinc-800 space-y-3">
+                        <p className="text-[10px] text-zinc-500 font-bold uppercase">Расположение абзацев:</p>
+                        <div className="space-y-4 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                          {slides.map((slide) => (
+                            <div key={slide.id} className="space-y-2">
+                              <p className="text-[9px] text-zinc-400 font-bold">Слайд {slide.id}</p>
+                              {slide.paragraphs?.map((para, pIdx) => (
+                                <div key={pIdx} className="space-y-1 pl-2 border-l border-zinc-800">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-[8px] text-zinc-600 truncate max-w-[150px] italic">"{para.text}"</span>
+                                    <span className="text-[8px] text-zinc-400">{para.verticalOffset}%</span>
+                                  </div>
+                                  <input 
+                                    type="range" 
+                                    min="10" 
+                                    max="90" 
+                                    value={para.verticalOffset} 
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value);
+                                      setSlides(prev => prev.map(s => s.id === slide.id ? {
+                                        ...s,
+                                        paragraphs: s.paragraphs?.map((p, i) => i === pIdx ? { ...p, verticalOffset: val } : p)
+                                      } : s));
+                                    }}
+                                    className="w-full accent-zinc-500 scale-90" 
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -309,7 +558,7 @@ const App: React.FC = () => {
             )}
           </div>
 
-          <div className="border-t border-zinc-900 pt-4 !-mt-4">
+          <div className="pt-4 !-mt-4">
             <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest mb-2 text-center">Предпросмотр</p>
             <div className="flex justify-center">
               <InstagramMockup slides={slides} config={config} />
