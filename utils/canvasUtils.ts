@@ -95,6 +95,9 @@ const getWrappedLines = (
     });
     if (currentLineParts.length > 0) {
       allLines.push({ parts: currentLineParts, isParagraphEnd: pIdx < paragraphs.length - 1 });
+    } else if (pIdx < paragraphs.length - 1) {
+      // Handle empty lines (double newlines)
+      allLines.push({ parts: [{ text: ' ', bold: false, color: null }], isParagraphEnd: true });
     }
   });
 
@@ -290,15 +293,18 @@ export const renderSlideToCanvas = async (
 
       ctx.textBaseline = 'top';
       finalHeadLayout.lines.forEach(l => {
+        let lx = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
+        const lineText = l.parts.map((p: any) => p.text).join('');
+        
         ctx.font = `700 ${headSize}px "${headerFont}"`;
         ctx.fillStyle = config.textColor;
-        let lx = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
+        
         if (config.alignment === Alignment.CENTER) {
           ctx.textAlign = 'center';
-          ctx.fillText(l.parts.map(p => p.text).join(''), lx, curY);
+          ctx.fillText(lineText, lx, curY);
         } else {
           ctx.textAlign = 'left';
-          ctx.fillText(l.parts.map(p => p.text).join(''), lx, curY);
+          ctx.fillText(lineText, lx, curY);
         }
         curY += headSize * 1.25;
       });
@@ -307,11 +313,23 @@ export const renderSlideToCanvas = async (
       
       finalBodyLayout.lines.forEach(l => {
         let lx = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
+        
         if (config.alignment === Alignment.CENTER) {
-          ctx.font = `400 ${baseFontSize}px "${bodyFont}"`;
-          ctx.textAlign = 'center';
-          ctx.fillStyle = config.textColor;
-          ctx.fillText(l.parts.map(p => p.text).join(''), lx, curY);
+          // Calculate total width for centered rich text
+          let totalW = 0;
+          l.parts.forEach((p: any) => {
+            ctx.font = `${p.bold ? '700' : '400'} ${baseFontSize}px "${bodyFont}"`;
+            totalW += ctx.measureText(p.text).width;
+          });
+          
+          let tempX = lx - totalW / 2;
+          ctx.textAlign = 'left';
+          l.parts.forEach((p: any) => {
+            ctx.font = `${p.bold ? '700' : '400'} ${baseFontSize}px "${bodyFont}"`;
+            ctx.fillStyle = p.color || config.textColor;
+            ctx.fillText(p.text, tempX, curY);
+            tempX += ctx.measureText(p.text).width;
+          });
         } else {
           ctx.textAlign = 'left';
           let tempX = lx;
@@ -354,11 +372,23 @@ export const renderSlideToCanvas = async (
         let lineY = py;
         layout.lines.forEach((line: any) => {
           let x = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
+          
           if (config.alignment === Alignment.CENTER) {
-            ctx.textAlign = 'center';
-            ctx.fillStyle = config.textColor;
-            ctx.font = `400 ${currentFontSize}px "${activeFont}"`;
-            ctx.fillText(line.parts.map((p: any) => p.text).join(''), x, lineY);
+            // Calculate total width for centered rich text
+            let totalW = 0;
+            line.parts.forEach((p: any) => {
+              ctx.font = `${p.bold ? '700' : '400'} ${currentFontSize}px "${activeFont}"`;
+              totalW += ctx.measureText(p.text).width;
+            });
+            
+            let tempX = x - totalW / 2;
+            ctx.textAlign = 'left';
+            line.parts.forEach((p: any) => {
+              ctx.font = `${p.bold ? '700' : '400'} ${currentFontSize}px "${activeFont}"`;
+              ctx.fillStyle = p.color || config.textColor;
+              ctx.fillText(p.text, tempX, lineY);
+              tempX += ctx.measureText(p.text).width;
+            });
           } else {
             ctx.textAlign = 'left';
             let tempX = x;

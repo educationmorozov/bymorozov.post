@@ -66,14 +66,14 @@ const App: React.FC = () => {
     setSlides(prev => {
       return filtered.map((text, i) => {
         const existing = prev.find(p => p.id === i + 1);
-        const lines = text.split('\n').filter(l => l.trim().length > 0);
+        const lines = text.split(/\n\s*\n/).filter(l => l.trim().length > 0);
         
         // If paragraphs already exist and text hasn't changed much, try to preserve offsets
         const paragraphs = lines.map((line, lIdx) => {
-          const existingPara = existing?.paragraphs?.[lIdx];
+          const existingPara = existing?.paragraphs?.find(p => p.text === line);
           return {
             text: line,
-            verticalOffset: existingPara?.verticalOffset ?? (lines.length > 1 ? (20 + (60 / (lines.length - 1)) * lIdx) : 50)
+            verticalOffset: existingPara?.verticalOffset ?? (lines.length > 1 ? (30 + (40 / (lines.length - 1)) * lIdx) : 50)
           };
         });
 
