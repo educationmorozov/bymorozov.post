@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
-  ChevronRight, ChevronLeft, Download, ImageIcon, Upload, Eye, RefreshCw, AlignLeft, AlignCenter, AlignJustify, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Camera, Home, Search, Play, User, BarChart2, Zap
+  ChevronRight, ChevronLeft, Download, ImageIcon, Upload, Eye, RefreshCw, AlignLeft, AlignCenter, AlignJustify, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Camera, Home, Search, Play, User, BarChart2, Zap, X
 } from 'lucide-react';
 import JSZip from 'jszip';
 import heic2any from 'heic2any';
@@ -35,6 +35,8 @@ const App: React.FC = () => {
   const [slides, setSlides] = useState<SlideData[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showCustomColor, setShowCustomColor] = useState(false);
+  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
+  const [activeStep4Plate, setActiveStep4Plate] = useState<string | null>(null);
   
   const [config, setConfig] = useState<DesignConfig>({
     splitType: SplitType.EMPTY_LINE,
@@ -42,6 +44,10 @@ const App: React.FC = () => {
     customColor: '#000000',
     textColor: '#ffffff',
     bgImageUrl: null,
+    bgMode: 'single',
+    overlayType: OverlayType.FULL,
+    overlayIntensity: 45,
+    overlayOffset: 50,
     alignment: Alignment.LEFT,
     fontPair: FONT_PAIRS[0],
     nickname: '',
@@ -49,7 +55,9 @@ const App: React.FC = () => {
     nickPosition: NickPosition.BOTTOM_LEFT,
     numbering: { enabled: true, position: 'bottom-right' },
     sizes: { first: AspectRatio.PORTRAIT, middle: AspectRatio.PORTRAIT, last: AspectRatio.PORTRAIT },
-    fontSizes: { first: 64, middle: 64, last: 64, lineHeight: 1.35, verticalOffset: 50 },
+    fontSizes: { first: 80, middle: 64, last: 64, lineHeight: 1.35, verticalOffset: 50, firstSubtitleSize: 40 },
+    firstSubtitleOpacity: 70,
+    firstSubtitleFont: BODY_FONTS[0],
     textBackground: { enabledFirst: false, enabledMiddle: false, color: '#000000', opacity: 50, borderRadius: 20, padding: 30 },
     finalSlide: { enabled: true, textBefore: 'Забирай подарок', codeWord: 'АКСЕЛЕРАТОР', textAfter: 'в директ', blogDescription: '', codeWordY: 50, avatarY: 85, codeWordVerticalOffset: 35 }
   });
@@ -73,7 +81,7 @@ const App: React.FC = () => {
           const existingPara = existing?.paragraphs?.find(p => p.text === line);
           return {
             text: line,
-            verticalOffset: existingPara?.verticalOffset ?? (lines.length > 1 ? (30 + (40 / (lines.length - 1)) * lIdx) : 50)
+            verticalOffset: existingPara?.verticalOffset ?? 50
           };
         });
 
@@ -217,267 +225,293 @@ const App: React.FC = () => {
             )}
 
             {step === 3 && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
                 <h2 className="text-xl font-bold uppercase tracking-tight">ШАГ 3: цвета и фон</h2>
                 
-                {config.format === SlideFormat.PERSONAL ? (
-                  <div className="space-y-6">
-                    <p className="text-[11px] text-zinc-500 font-bold uppercase">Настройте фон для каждого слайда:</p>
-                    <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                      {slides.map((slide, idx) => (
-                        <div key={slide.id} className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-4">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold uppercase tracking-tighter text-zinc-400">Слайд {slide.id}</span>
-                              <label className="cursor-pointer bg-white text-black px-3 py-1 rounded-full text-[10px] font-black hover:bg-zinc-200 transition-all">
-                              {slide.bgImageUrl ? 'ИЗМЕНИТЬ ФОТО' : 'ВЫБРАТЬ ФОТО'}
-                              <input 
-                                type="file" 
-                                className="hidden" 
-                                onChange={async (e) => {
-                                  let file = e.target.files?.[0];
-                                  if (file) {
-                                    if (file.name.toLowerCase().endsWith('.heic') || file.type === 'image/heic') {
-                                      try {
-                                        const convertedBlob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.8 });
-                                        file = new File([Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' });
-                                      } catch (err) {
-                                        console.error("HEIC conversion failed:", err);
-                                      }
-                                    }
-                                    const reader = new FileReader();
-                                    reader.onloadend = () => {
-                                      setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, bgImageUrl: reader.result as string } : s));
-                                    };
-                                    reader.readAsDataURL(file);
-                                  }
-                                }} 
-                              />
-                            </label>
-                          </div>
-                          
-                          {slide.bgImageUrl && (
-                            <div className="space-y-3 animate-in fade-in">
-                              <div className="aspect-video w-full rounded-lg overflow-hidden border border-zinc-800">
-                                <img src={slide.bgImageUrl} className="w-full h-full object-cover" />
-                              </div>
-                              
-                              <div className="space-y-2">
-                                <span className="text-[9px] text-zinc-500 font-bold uppercase">Тип затемнения</span>
-                                <div className="grid grid-cols-2 gap-1">
-                                  {Object.values(OverlayType).map(ot => (
-                                    <button 
-                                      key={ot} 
-                                      onClick={() => setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, overlayType: ot } : s))}
-                                      className={`py-2 rounded-lg border text-[9px] font-bold transition-all ${slide.overlayType === ot ? 'bg-white text-black border-white' : 'bg-black border-zinc-800 text-zinc-500'}`}
-                                    >
-                                      {ot}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              
-                              <div className="space-y-1">
-                                <div className="flex justify-between">
-                                  <span className="text-[9px] text-zinc-500 font-bold uppercase">Интенсивность</span>
-                                  <span className="text-[9px] text-zinc-300 font-bold">{slide.overlayIntensity}%</span>
-                                </div>
-                                <input 
-                                  type="range" 
-                                  min="0" 
-                                  max="100" 
-                                  value={slide.overlayIntensity} 
-                                  onChange={(e) => setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, overlayIntensity: parseInt(e.target.value) } : s))}
-                                  className="w-full accent-white" 
-                                />
-                              </div>
+                <div className="space-y-4">
+                  <p className="text-[11px] text-zinc-500 font-bold uppercase">Общий фон:</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {PRESETS.map(p => (
+                      <button key={p.name} onClick={() => {setConfig(c => ({...c, customColor: p.bg, textColor: p.text, bgImageUrl: null})); setShowCustomColor(false); setShowPhotoOptions(false);}} className="p-4 rounded-xl border border-zinc-800 text-left h-20 flex flex-col justify-end transition-all" style={{backgroundColor: p.bg}}>
+                        <span className="text-[10px] font-bold" style={{color: p.text}}>{p.name}</span>
+                      </button>
+                    ))}
+                    <button onClick={() => {setShowCustomColor(!showCustomColor); setShowPhotoOptions(false);}} className={`p-4 rounded-xl border h-20 text-[10px] font-bold uppercase transition-all ${showCustomColor ? 'bg-white text-black border-white' : 'bg-zinc-900 border-zinc-800'}`}>Свой цвет</button>
+                    <button onClick={() => {setShowPhotoOptions(!showPhotoOptions); setShowCustomColor(false);}} className={`p-4 rounded-xl border h-20 text-[10px] font-bold uppercase transition-all ${showPhotoOptions ? 'bg-white text-black border-white' : 'bg-zinc-900 border-zinc-800'}`}>Свое фото</button>
+                  </div>
 
-                              {(slide.overlayType === OverlayType.TOP || slide.overlayType === OverlayType.BOTTOM) && (
-                                <div className="space-y-1 animate-in slide-in-from-top-1">
-                                  <div className="flex justify-between">
-                                    <span className="text-[9px] text-zinc-500 font-bold uppercase">Граница затемнения</span>
-                                    <span className="text-[9px] text-zinc-300 font-bold">{slide.overlayOffset}%</span>
+                  {showCustomColor && (
+                    <div className="grid grid-cols-2 gap-4 p-4 bg-zinc-900 rounded-xl border border-zinc-800 animate-in fade-in">
+                      <div className="space-y-1.5">
+                        <span className="text-[9px] text-zinc-500 font-bold uppercase">Фон</span>
+                        <div className="flex gap-2">
+                          <input type="color" value={config.customColor} onChange={e => setConfig(c => ({...c, customColor: e.target.value}))} className="w-8 h-8 bg-black border border-zinc-800 rounded cursor-pointer" />
+                          <input type="text" value={config.customColor} onChange={e => setConfig(c => ({...c, customColor: e.target.value}))} className="flex-1 bg-black border border-zinc-800 p-1 rounded text-[9px] font-mono text-white" placeholder="#000000" />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <span className="text-[9px] text-zinc-500 font-bold uppercase">Текст</span>
+                        <div className="flex gap-2">
+                          <input type="color" value={config.textColor} onChange={e => setConfig(c => ({...c, textColor: e.target.value}))} className="w-8 h-8 bg-black border border-zinc-800 rounded cursor-pointer" />
+                          <input type="text" value={config.textColor} onChange={e => setConfig(c => ({...c, textColor: e.target.value}))} className="flex-1 bg-black border border-zinc-800 p-1 rounded text-[9px] font-mono text-white" placeholder="#FFFFFF" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {showPhotoOptions && (
+                    <div className="space-y-6 p-4 bg-zinc-900 rounded-2xl border border-zinc-800 animate-in fade-in">
+                      <div className="space-y-2">
+                        <span className="text-[10px] font-bold uppercase text-zinc-500">Режим фона</span>
+                        <div className="grid grid-cols-2 gap-1">
+                          <button 
+                            onClick={() => setConfig(c => ({...c, bgMode: 'single'}))}
+                            className={`py-2.5 rounded-xl border text-[9px] font-black transition-all ${config.bgMode === 'single' ? 'bg-white text-black border-white' : 'bg-black border-zinc-800 text-zinc-500'}`}
+                          >
+                            ОДНО ДЛЯ ВСЕХ
+                          </button>
+                          <button 
+                            onClick={() => setConfig(c => ({...c, bgMode: 'multiple'}))}
+                            className={`py-2.5 rounded-xl border text-[9px] font-black transition-all ${config.bgMode === 'multiple' ? 'bg-white text-black border-white' : 'bg-black border-zinc-800 text-zinc-500'}`}
+                          >
+                            ДЛЯ КАЖДОГО СВОЕ
+                          </button>
+                        </div>
+                      </div>
+
+                      {config.bgMode === 'single' ? (
+                        <div className="space-y-4 animate-in fade-in">
+                          <label className="w-full p-4 rounded-xl border border-zinc-800 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-black transition-all">
+                            <Upload size={20} className="text-zinc-500" />
+                            <span className="text-[10px] font-bold uppercase text-zinc-400">{config.bgImageUrl ? 'Изменить общее фото' : 'Загрузить общее фото'}</span>
+                            <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'bg')} />
+                          </label>
+
+                          {config.bgImageUrl && (
+                            <div className="space-y-4 pt-4 border-t border-zinc-800">
+                              <div className="aspect-video w-full rounded-lg overflow-hidden border border-zinc-800 relative">
+                                <img src={config.bgImageUrl} className="w-full h-full object-cover" />
+                                <button onClick={() => setConfig(c => ({...c, bgImageUrl: null}))} className="absolute top-2 right-2 bg-black/50 p-1 rounded-full hover:bg-black transition-all"><X size={14}/></button>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <span className="text-[9px] text-zinc-500 font-bold uppercase">Затемнение</span>
+                                  <div className="grid grid-cols-2 gap-1">
+                                    {Object.values(OverlayType).map(ot => (
+                                      <button key={ot} onClick={() => setConfig(c => ({...c, overlayType: ot}))} className={`py-1.5 rounded-lg border text-[8px] font-bold ${config.overlayType === ot ? 'bg-white text-black border-white' : 'bg-black border-zinc-800 text-zinc-500'}`}>{ot}</button>
+                                    ))}
                                   </div>
-                                  <input 
-                                    type="range" 
-                                    min="10" 
-                                    max="90" 
-                                    value={slide.overlayOffset} 
-                                    onChange={(e) => setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, overlayOffset: parseInt(e.target.value) } : s))}
-                                    className="w-full accent-white" 
-                                  />
                                 </div>
-                              )}
+                                <div className="space-y-2">
+                                  <div className="flex justify-between"><span className="text-[9px] text-zinc-500 font-bold uppercase">Сила</span><span className="text-[9px] text-zinc-300 font-bold">{config.overlayIntensity}%</span></div>
+                                  <input type="range" min="0" max="100" value={config.overlayIntensity} onChange={e => setConfig(c => ({...c, overlayIntensity: parseInt(e.target.value)}))} className="w-full accent-white" />
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>
-                      ))}
+                      ) : (
+                        <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar animate-in fade-in">
+                          {slides.map((slide) => (
+                            <div key={slide.id} className="p-3 bg-black/40 rounded-xl border border-zinc-800 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-zinc-500">Слайд {slide.id}</span>
+                                <label className="cursor-pointer bg-zinc-800 text-zinc-300 px-3 py-1 rounded-full text-[8px] font-bold hover:bg-zinc-700">
+                                  {slide.bgImageUrl ? 'ИЗМЕНИТЬ' : 'ВЫБРАТЬ'}
+                                  <input type="file" className="hidden" onChange={async (e) => {
+                                    let file = e.target.files?.[0];
+                                    if (file) {
+                                      if (file.name.toLowerCase().endsWith('.heic') || file.type === 'image/heic') {
+                                        try {
+                                          const convertedBlob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.8 });
+                                          file = new File([Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' });
+                                        } catch (err) { console.error(err); }
+                                      }
+                                      const reader = new FileReader();
+                                      reader.onloadend = () => setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, bgImageUrl: reader.result as string } : s));
+                                      reader.readAsDataURL(file);
+                                    }
+                                  }} />
+                                </label>
+                              </div>
+                              {slide.bgImageUrl && (
+                                <div className="space-y-3">
+                                  <div className="aspect-video w-full rounded-lg overflow-hidden border border-zinc-800 relative">
+                                    <img src={slide.bgImageUrl} className="w-full h-full object-cover" />
+                                    <button onClick={() => setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, bgImageUrl: null } : s))} className="absolute top-2 right-2 bg-black/50 p-1 rounded-full"><X size={12}/></button>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                      <span className="text-[8px] text-zinc-600 uppercase font-bold">Затемнение</span>
+                                      <div className="grid grid-cols-2 gap-1">
+                                        {Object.values(OverlayType).map(ot => (
+                                          <button key={ot} onClick={() => setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, overlayType: ot } : s))} className={`py-1 rounded border text-[7px] font-bold ${slide.overlayType === ot ? 'bg-white text-black border-white' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`}>{ot}</button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                      <div className="flex justify-between"><span className="text-[8px] text-zinc-600 uppercase font-bold">Сила</span><span className="text-[8px] text-zinc-400">{slide.overlayIntensity}%</span></div>
+                                      <input type="range" min="0" max="100" value={slide.overlayIntensity} onChange={e => setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, overlayIntensity: parseInt(e.target.value) } : s))} className="w-full accent-white" />
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-2 gap-2">
-                      {PRESETS.map(p => (
-                        <button key={p.name} onClick={() => {setConfig(c => ({...c, customColor: p.bg, textColor: p.text})); setShowCustomColor(false);}} className="p-4 rounded-xl border border-zinc-800 text-left h-20 flex flex-col justify-end transition-all" style={{backgroundColor: p.bg}}>
-                          <span className="text-[10px] font-bold" style={{color: p.text}}>{p.name}</span>
-                        </button>
-                      ))}
-                      <button onClick={() => setShowCustomColor(!showCustomColor)} className={`p-4 rounded-xl border h-20 text-[10px] font-bold uppercase transition-all ${showCustomColor ? 'bg-white text-black border-white' : 'bg-zinc-900 border-zinc-800'}`}>Свой цвет</button>
-                      <label className="p-4 rounded-xl border border-zinc-800 h-20 flex items-center justify-center cursor-pointer hover:bg-zinc-900 bg-zinc-900 transition-all">
-                        <span className="text-[10px] font-bold uppercase">Свое фото</span>
-                        <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'bg')} />
-                      </label>
-                    </div>
-                    {showCustomColor && (
-                      <div className="grid grid-cols-2 gap-4 p-4 bg-zinc-900 rounded-xl border border-zinc-800 animate-in fade-in">
-                        <div className="space-y-1.5"><span className="text-[9px] text-zinc-500 font-bold uppercase">HEX Фона</span><input type="text" value={config.customColor} onChange={e => setConfig(c => ({...c, customColor: e.target.value}))} className="w-full bg-black border border-zinc-800 p-2 rounded text-[10px] font-mono text-white" placeholder="#000000" /></div>
-                        <div className="space-y-1.5"><span className="text-[9px] text-zinc-500 font-bold uppercase">HEX Текста</span><input type="text" value={config.textColor} onChange={e => setConfig(c => ({...c, textColor: e.target.value}))} className="w-full bg-black border border-zinc-800 p-2 rounded text-[10px] font-mono text-white" placeholder="#FFFFFF" /></div>
-                      </div>
-                    )}
-                  </>
-                )}
+                  )}
+                </div>
               </div>
             )}
 
             {step === 4 && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
                 <h2 className="text-xl font-bold uppercase tracking-tight">ШАГ 4: шрифты и верстка</h2>
-                <div className="grid grid-cols-2 gap-2">
-                  {FONT_PAIRS.map(p => (
-                    <button key={p.name} onClick={() => setConfig(c => ({...c, fontPair: p}))} className={`p-4 rounded-xl border text-left flex flex-col h-20 transition-all ${config.fontPair.name === p.name ? 'border-white bg-white/10' : 'border-zinc-800 bg-zinc-900'}`}>
-                      <span className="text-[11px] font-bold mb-1" style={{fontFamily: p.header}}>{p.name}</span>
-                      <span className="text-[9px] text-zinc-600 opacity-60 mt-auto">АБВГД abcde</span>
-                    </button>
-                  ))}
-                </div>
-                {config.fontPair.isCustom && (
-                  <div className="p-4 bg-zinc-900 rounded-xl border border-zinc-800 grid grid-cols-2 gap-4">
-                     <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Заголовок</span><select value={config.fontPair.header} onChange={e => setConfig(c => ({...c, fontPair: {...c.fontPair, header: e.target.value}}))} className="w-full bg-black border border-zinc-800 p-2 rounded-lg text-[10px] text-white">{HEADER_FONTS.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
-                     <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Текст</span><select value={config.fontPair.body} onChange={e => setConfig(c => ({...c, fontPair: {...c.fontPair, body: e.target.value}}))} className="w-full bg-black border border-zinc-800 p-2 rounded-lg text-[10px] text-white">{BODY_FONTS.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
-                  </div>
-                )}
                 
-                <div className="pt-4 border-t border-zinc-900 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Размер (Слайд 1)</span><input type="range" min="30" max="120" value={config.fontSizes.first} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, first: parseInt(e.target.value)}}))} className="w-full accent-white" /></div>
-                    <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Размер (Слайд 2+)</span><input type="range" min="30" max="100" value={config.fontSizes.middle} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, middle: parseInt(e.target.value)}}))} className="w-full accent-white" /></div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[Alignment.LEFT, Alignment.CENTER, Alignment.JUSTIFY].map(a => (
-                      <button key={a} onClick={() => setConfig(c => ({...c, alignment: a}))} className={`p-2 rounded-lg border flex items-center justify-center ${config.alignment === a ? 'bg-white text-black' : 'border-zinc-800'}`}>
-                        {a === Alignment.LEFT ? <AlignLeft size={16}/> : a === Alignment.CENTER ? <AlignCenter size={16}/> : <AlignJustify size={16}/>}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Межстрочный интервал</span><input type="range" min="100" max="300" value={config.fontSizes.lineHeight * 100} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, lineHeight: parseInt(e.target.value) / 100}}))} className="w-full accent-white" /></div>
-                  <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Смещение по вертикали</span><input type="range" min="20" max="80" value={config.fontSizes.verticalOffset} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, verticalOffset: parseInt(e.target.value)}}))} className="w-full accent-white" /></div>
-                </div>
-
-                <div className="pt-4 border-t border-zinc-900 space-y-4">
-                  <div className="space-y-3">
-                    <h3 className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Подложка под текст</h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button 
-                        onClick={() => setConfig(c => ({...c, textBackground: {...c.textBackground, enabledFirst: !c.textBackground.enabledFirst}}))}
-                        className={`px-4 py-2.5 rounded-xl text-[9px] font-black transition-all border ${config.textBackground.enabledFirst ? 'bg-white text-black border-white' : 'bg-zinc-900 text-zinc-500 border-zinc-800'}`}
-                      >
-                        1 СЛАЙД: {config.textBackground.enabledFirst ? 'ВКЛ' : 'ВЫКЛ'}
-                      </button>
-                      <button 
-                        onClick={() => setConfig(c => ({...c, textBackground: {...c.textBackground, enabledMiddle: !c.textBackground.enabledMiddle}}))}
-                        className={`px-4 py-2.5 rounded-xl text-[9px] font-black transition-all border ${config.textBackground.enabledMiddle ? 'bg-white text-black border-white' : 'bg-zinc-900 text-zinc-500 border-zinc-800'}`}
-                      >
-                        ОСТАЛЬНЫЕ: {config.textBackground.enabledMiddle ? 'ВКЛ' : 'ВЫКЛ'}
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {(config.textBackground.enabledFirst || config.textBackground.enabledMiddle) && (
-                    <div className="space-y-4 p-4 bg-zinc-900 rounded-xl border border-zinc-800 animate-in fade-in">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <span className="text-[9px] text-zinc-500 font-bold uppercase">Цвет подложки</span>
-                          <div className="flex gap-2">
-                            <input 
-                              type="color" 
-                              value={config.textBackground.color} 
-                              onChange={e => setConfig(c => ({...c, textBackground: {...c.textBackground, color: e.target.value}}))} 
-                              className="w-10 h-10 bg-black border border-zinc-800 rounded cursor-pointer" 
-                            />
-                            <input 
-                              type="text" 
-                              value={config.textBackground.color} 
-                              onChange={e => setConfig(c => ({...c, textBackground: {...c.textBackground, color: e.target.value}}))} 
-                              className="flex-1 bg-black border border-zinc-800 p-2 rounded text-[10px] font-mono text-white" 
-                              placeholder="#000000" 
-                            />
-                          </div>
+                {/* Plate 1: Выбираем шрифт */}
+                <div className="border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-900/30">
+                  <button 
+                    onClick={() => setActiveStep4Plate(activeStep4Plate === 'font' ? null : 'font')}
+                    className="w-full p-4 flex items-center justify-between hover:bg-zinc-900 transition-all"
+                  >
+                    <span className="text-xs font-black uppercase tracking-widest">Выбираем шрифт</span>
+                    <ChevronRight size={16} className={`transition-transform duration-300 ${activeStep4Plate === 'font' ? 'rotate-90' : ''}`} />
+                  </button>
+                  {activeStep4Plate === 'font' && (
+                    <div className="p-4 pt-0 space-y-6 animate-in slide-in-from-top-2 duration-300">
+                      <div className="grid grid-cols-2 gap-2">
+                        {FONT_PAIRS.map(p => (
+                          <button key={p.name} onClick={() => setConfig(c => ({...c, fontPair: p}))} className={`p-4 rounded-xl border text-left flex flex-col h-20 transition-all ${config.fontPair.name === p.name ? 'border-white bg-white/10' : 'border-zinc-800 bg-zinc-900'}`}>
+                            <span className="text-[11px] font-bold mb-1" style={{fontFamily: p.header}}>{p.name}</span>
+                            <span className="text-[9px] text-zinc-600 opacity-60 mt-auto">АБВГД abcde</span>
+                          </button>
+                        ))}
+                      </div>
+                      {config.fontPair.isCustom && (
+                        <div className="p-4 bg-zinc-900 rounded-xl border border-zinc-800 grid grid-cols-2 gap-4">
+                           <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Заголовок</span><select value={config.fontPair.header} onChange={e => setConfig(c => ({...c, fontPair: {...c.fontPair, header: e.target.value}}))} className="w-full bg-black border border-zinc-800 p-2 rounded-lg text-[10px] text-white">{HEADER_FONTS.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
+                           <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Текст</span><select value={config.fontPair.body} onChange={e => setConfig(c => ({...c, fontPair: {...c.fontPair, body: e.target.value}}))} className="w-full bg-black border border-zinc-800 p-2 rounded-lg text-[10px] text-white">{BODY_FONTS.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
                         </div>
-                        <div className="space-y-1.5">
-                          <div className="flex justify-between">
-                            <span className="text-[9px] text-zinc-500 font-bold uppercase">Прозрачность</span>
-                            <span className="text-[9px] text-zinc-300 font-bold">{config.textBackground.opacity}%</span>
-                          </div>
-                          <input 
-                            type="range" 
-                            min="0" 
-                            max="100" 
-                            value={config.textBackground.opacity} 
-                            onChange={e => setConfig(c => ({...c, textBackground: {...c.textBackground, opacity: parseInt(e.target.value)}}))} 
-                            className="w-full accent-white h-10" 
-                          />
+                      )}
+                      <div className="space-y-2">
+                        <span className="text-[9px] text-zinc-500 uppercase font-bold">Цвет текста</span>
+                        <div className="flex gap-2">
+                          <input type="color" value={config.textColor} onChange={e => setConfig(c => ({...c, textColor: e.target.value}))} className="w-10 h-10 bg-black border border-zinc-800 rounded cursor-pointer" />
+                          <input type="text" value={config.textColor} onChange={e => setConfig(c => ({...c, textColor: e.target.value}))} className="flex-1 bg-black border border-zinc-800 p-2 rounded text-[10px] font-mono text-white" placeholder="#FFFFFF" />
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <span className="text-[9px] text-zinc-500 font-bold uppercase">Закругление</span>
-                          <input 
-                            type="range" 
-                            min="0" 
-                            max="100" 
-                            value={config.textBackground.borderRadius} 
-                            onChange={e => setConfig(c => ({...c, textBackground: {...c.textBackground, borderRadius: parseInt(e.target.value)}}))} 
-                            className="w-full accent-white" 
-                          />
+                    </div>
+                  )}
+                </div>
+
+                {/* Plate 2: Размер текста */}
+                <div className="border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-900/30">
+                  <button 
+                    onClick={() => setActiveStep4Plate(activeStep4Plate === 'size' ? null : 'size')}
+                    className="w-full p-4 flex items-center justify-between hover:bg-zinc-900 transition-all"
+                  >
+                    <span className="text-xs font-black uppercase tracking-widest">Размер текста</span>
+                    <ChevronRight size={16} className={`transition-transform duration-300 ${activeStep4Plate === 'size' ? 'rotate-90' : ''}`} />
+                  </button>
+                  {activeStep4Plate === 'size' && (
+                    <div className="p-4 pt-0 space-y-6 animate-in slide-in-from-top-2 duration-300">
+                      <div className="p-4 bg-zinc-900/50 rounded-2xl border border-zinc-800 space-y-4">
+                        <h3 className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Первый слайд</h3>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <span className="text-[9px] text-zinc-500 uppercase font-bold">Заголовок</span>
+                            <input type="range" min="30" max="150" value={config.fontSizes.first} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, first: parseInt(e.target.value)}}))} className="w-full accent-white" />
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-[9px] text-zinc-500 uppercase font-bold">Подзаголовок</span>
+                            <input type="range" min="20" max="100" value={config.fontSizes.firstSubtitleSize} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, firstSubtitleSize: parseInt(e.target.value)}}))} className="w-full accent-white" />
+                          </div>
                         </div>
-                        <div className="space-y-1.5">
-                          <span className="text-[9px] text-zinc-500 font-bold uppercase">Отступы (Padding)</span>
-                          <input 
-                            type="range" 
-                            min="0" 
-                            max="100" 
-                            value={config.textBackground.padding} 
-                            onChange={e => setConfig(c => ({...c, textBackground: {...c.textBackground, padding: parseInt(e.target.value)}}))} 
-                            className="w-full accent-white" 
-                          />
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <span className="text-[9px] text-zinc-500 uppercase font-bold">Шрифт подзаг.</span>
+                            <select value={config.firstSubtitleFont} onChange={e => setConfig(c => ({...c, firstSubtitleFont: e.target.value}))} className="w-full bg-black border border-zinc-800 p-2 rounded-lg text-[10px] text-white">
+                              {BODY_FONTS.map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex justify-between"><span className="text-[9px] text-zinc-500 uppercase font-bold">Яркость</span><span className="text-[9px] text-zinc-300 font-bold">{config.firstSubtitleOpacity}%</span></div>
+                            <input type="range" min="10" max="100" value={config.firstSubtitleOpacity} onChange={e => setConfig(c => ({...c, firstSubtitleOpacity: parseInt(e.target.value)}))} className="w-full accent-white" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Слайды 2+</span><input type="range" min="30" max="100" value={config.fontSizes.middle} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, middle: parseInt(e.target.value)}}))} className="w-full accent-white" /></div>
+                        <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Межстрочный</span><input type="range" min="100" max="300" value={config.fontSizes.lineHeight * 100} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, lineHeight: parseInt(e.target.value) / 100}}))} className="w-full accent-white" /></div>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-3 gap-2">
+                          {[Alignment.LEFT, Alignment.CENTER, Alignment.JUSTIFY].map(a => (
+                            <button key={a} onClick={() => setConfig(c => ({...c, alignment: a}))} className={`p-2 rounded-lg border flex items-center justify-center ${config.alignment === a ? 'bg-white text-black' : 'border-zinc-800'}`}>
+                              {a === Alignment.LEFT ? <AlignLeft size={16}/> : a === Alignment.CENTER ? <AlignCenter size={16}/> : <AlignJustify size={16}/>}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Смещение (Общее)</span><input type="range" min="20" max="80" value={config.fontSizes.verticalOffset} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, verticalOffset: parseInt(e.target.value)}}))} className="w-full accent-white" /></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Plate 3: Подложка под текст */}
+                <div className="border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-900/30">
+                  <button 
+                    onClick={() => setActiveStep4Plate(activeStep4Plate === 'bg' ? null : 'bg')}
+                    className="w-full p-4 flex items-center justify-between hover:bg-zinc-900 transition-all"
+                  >
+                    <span className="text-xs font-black uppercase tracking-widest">Подложка под текст</span>
+                    <ChevronRight size={16} className={`transition-transform duration-300 ${activeStep4Plate === 'bg' ? 'rotate-90' : ''}`} />
+                  </button>
+                  {activeStep4Plate === 'bg' && (
+                    <div className="p-4 pt-0 space-y-6 animate-in slide-in-from-top-2 duration-300">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => setConfig(c => ({...c, textBackground: {...c.textBackground, enabledFirst: !c.textBackground.enabledFirst}}))} className={`px-4 py-2.5 rounded-xl text-[9px] font-black border ${config.textBackground.enabledFirst ? 'bg-white text-black border-white' : 'bg-zinc-900 text-zinc-500 border-zinc-800'}`}>1 СЛАЙД: {config.textBackground.enabledFirst ? 'ВКЛ' : 'ВЫКЛ'}</button>
+                        <button onClick={() => setConfig(c => ({...c, textBackground: {...c.textBackground, enabledMiddle: !c.textBackground.enabledMiddle}}))} className={`px-4 py-2.5 rounded-xl text-[9px] font-black border ${config.textBackground.enabledMiddle ? 'bg-white text-black border-white' : 'bg-zinc-900 text-zinc-500 border-zinc-800'}`}>ОСТАЛЬНЫЕ: {config.textBackground.enabledMiddle ? 'ВКЛ' : 'ВЫКЛ'}</button>
+                      </div>
+
+                      <div className="space-y-4 p-4 bg-zinc-900 rounded-xl border border-zinc-800">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <span className="text-[9px] text-zinc-500 font-bold uppercase">Цвет</span>
+                            <div className="flex gap-2">
+                              <input type="color" value={config.textBackground.color} onChange={e => setConfig(c => ({...c, textBackground: {...c.textBackground, color: e.target.value}}))} className="w-8 h-8 bg-black border border-zinc-800 rounded cursor-pointer" />
+                              <input type="text" value={config.textBackground.color} onChange={e => setConfig(c => ({...c, textBackground: {...c.textBackground, color: e.target.value}}))} className="flex-1 bg-black border border-zinc-800 p-1 rounded text-[9px] font-mono text-white" />
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between"><span className="text-[9px] text-zinc-500 font-bold uppercase">Прозрачность</span><span className="text-[9px] text-zinc-300 font-bold">{config.textBackground.opacity}%</span></div>
+                            <input type="range" min="0" max="100" value={config.textBackground.opacity} onChange={e => setConfig(c => ({...c, textBackground: {...c.textBackground, opacity: parseInt(e.target.value)}}))} className="w-full accent-white" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5"><span className="text-[9px] text-zinc-500 font-bold uppercase">Закругление</span><input type="range" min="0" max="100" value={config.textBackground.borderRadius} onChange={e => setConfig(c => ({...c, textBackground: {...c.textBackground, borderRadius: parseInt(e.target.value)}}))} className="w-full accent-white" /></div>
+                          <div className="space-y-1.5"><span className="text-[9px] text-zinc-500 font-bold uppercase">Отступы</span><input type="range" min="0" max="100" value={config.textBackground.padding} onChange={e => setConfig(c => ({...c, textBackground: {...c.textBackground, padding: parseInt(e.target.value)}}))} className="w-full accent-white" /></div>
                         </div>
                       </div>
 
                       <div className="pt-4 border-t border-zinc-800 space-y-3">
                         <p className="text-[10px] text-zinc-500 font-bold uppercase">Расположение абзацев:</p>
-                        <div className="space-y-4 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="space-y-4 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
                           {slides.map((slide) => (
                             <div key={slide.id} className="space-y-2">
                               <p className="text-[9px] text-zinc-400 font-bold">Слайд {slide.id}</p>
                               {slide.paragraphs?.map((para, pIdx) => (
                                 <div key={pIdx} className="space-y-1 pl-2 border-l border-zinc-800">
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-[8px] text-zinc-600 truncate max-w-[150px] italic">"{para.text}"</span>
-                                    <span className="text-[8px] text-zinc-400">{para.verticalOffset}%</span>
-                                  </div>
-                                  <input 
-                                    type="range" 
-                                    min="10" 
-                                    max="90" 
-                                    value={para.verticalOffset} 
-                                    onChange={(e) => {
-                                      const val = parseInt(e.target.value);
-                                      setSlides(prev => prev.map(s => s.id === slide.id ? {
-                                        ...s,
-                                        paragraphs: s.paragraphs?.map((p, i) => i === pIdx ? { ...p, verticalOffset: val } : p)
-                                      } : s));
-                                    }}
-                                    className="w-full accent-zinc-500 scale-90" 
-                                  />
+                                  <div className="flex justify-between items-center"><span className="text-[8px] text-zinc-600 truncate max-w-[150px] italic">"{para.text}"</span><span className="text-[8px] text-zinc-400">{para.verticalOffset}%</span></div>
+                                  <input type="range" min="10" max="90" value={para.verticalOffset} onChange={(e) => {
+                                    const val = parseInt(e.target.value);
+                                    setSlides(prev => prev.map(s => s.id === slide.id ? {...s, paragraphs: s.paragraphs?.map((p, i) => i === pIdx ? { ...p, verticalOffset: val } : p)} : s));
+                                  }} className="w-full accent-zinc-500 scale-90" />
                                 </div>
                               ))}
                             </div>

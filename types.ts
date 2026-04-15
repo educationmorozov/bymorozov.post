@@ -57,6 +57,10 @@ export interface DesignConfig {
   customColor: string;
   textColor: string;
   bgImageUrl: string | null;
+  bgMode: 'single' | 'multiple';
+  overlayType: OverlayType;
+  overlayIntensity: number;
+  overlayOffset: number;
   alignment: Alignment;
   fontPair: {
     name: string;
@@ -82,7 +86,10 @@ export interface DesignConfig {
     last: number;
     lineHeight: number;
     verticalOffset: number; // 0-100
+    firstSubtitleSize: number;
   };
+  firstSubtitleOpacity: number; // 0-100
+  firstSubtitleFont: string;
   textBackground: {
     enabledFirst: boolean;
     enabledMiddle: boolean;

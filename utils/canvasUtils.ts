@@ -67,7 +67,7 @@ const getWrappedLines = (
   lineHeightScale: number,
   format?: SlideFormat
 ) => {
-  const paragraphs = text.split('\n');
+  const paragraphs = text.replace(/\r\n/g, '\n').split('\n');
   const allLines: { parts: TextPart[]; isParagraphEnd?: boolean }[] = [];
   
   paragraphs.forEach((p, pIdx) => {
@@ -130,9 +130,19 @@ export const renderSlideToCanvas = async (
   ctx.fillStyle = config.customColor;
   ctx.fillRect(0, 0, width, height);
 
-  const bgUrl = slide?.bgImageUrl || config.bgImageUrl;
-  const overlayType = slide?.overlayType || OverlayType.FULL;
-  const overlayIntensity = (slide?.overlayIntensity ?? 45) / 100;
+  let bgUrl = null;
+  let oType = config.overlayType;
+  let oIntensity = config.overlayIntensity / 100;
+  let oOffset = config.overlayOffset;
+
+  if (config.bgMode === 'single') {
+    bgUrl = config.bgImageUrl;
+  } else if (!isFinal && slide?.bgImageUrl) {
+    bgUrl = slide.bgImageUrl;
+    oType = slide.overlayType || config.overlayType;
+    oIntensity = (slide.overlayIntensity ?? config.overlayIntensity) / 100;
+    oOffset = slide.overlayOffset ?? config.overlayOffset;
+  }
 
   if (bgUrl) {
     try {
@@ -141,45 +151,37 @@ export const renderSlideToCanvas = async (
       await new Promise((r, j) => { img.onload = r; img.onerror = j; });
       
       ctx.save();
-      
-      // Object-fit Cover logic
       const scale = Math.max(width / img.width, height / img.height);
       const x = (width / 2) - (img.width / 2) * scale;
       const y = (height / 2) - (img.height / 2) * scale;
       ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-      
       ctx.restore();
 
-      // Apply Overlay
-      if (overlayType === OverlayType.FULL) {
-        ctx.fillStyle = `rgba(0,0,0,${overlayIntensity})`;
+      if (oType === OverlayType.FULL) {
+        ctx.fillStyle = `rgba(0,0,0,${oIntensity})`;
         ctx.fillRect(0, 0, width, height);
-      } else if (overlayType === OverlayType.TOP) {
-        const offset = (slide?.overlayOffset ?? 50) / 100;
-        const grad = ctx.createLinearGradient(0, 0, 0, height * offset * 1.4);
-        grad.addColorStop(0, `rgba(0,0,0,${overlayIntensity})`);
+      } else if (oType === OverlayType.TOP) {
+        const grad = ctx.createLinearGradient(0, 0, 0, height * (oOffset / 100) * 1.4);
+        grad.addColorStop(0, `rgba(0,0,0,${oIntensity})`);
         grad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, width, height);
-      } else if (overlayType === OverlayType.BOTTOM) {
-        const offset = (slide?.overlayOffset ?? 50) / 100;
-        const grad = ctx.createLinearGradient(0, height * (1 - offset * 1.4), 0, height);
+      } else if (oType === OverlayType.BOTTOM) {
+        const grad = ctx.createLinearGradient(0, height * (1 - (oOffset / 100) * 1.4), 0, height);
         grad.addColorStop(0, 'rgba(0,0,0,0)');
-        grad.addColorStop(1, `rgba(0,0,0,${overlayIntensity})`);
+        grad.addColorStop(1, `rgba(0,0,0,${oIntensity})`);
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, width, height);
-      } else if (overlayType === OverlayType.BOTH) {
-        // Top gradient
+      } else if (oType === OverlayType.BOTH) {
         const gradTop = ctx.createLinearGradient(0, 0, 0, height * 0.4);
-        gradTop.addColorStop(0, `rgba(0,0,0,${overlayIntensity})`);
+        gradTop.addColorStop(0, `rgba(0,0,0,${oIntensity})`);
         gradTop.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = gradTop;
         ctx.fillRect(0, 0, width, height * 0.5);
         
-        // Bottom gradient
         const gradBottom = ctx.createLinearGradient(0, height * 0.6, 0, height);
         gradBottom.addColorStop(0, 'rgba(0,0,0,0)');
-        gradBottom.addColorStop(1, `rgba(0,0,0,${overlayIntensity})`);
+        gradBottom.addColorStop(1, `rgba(0,0,0,${oIntensity})`);
         ctx.fillStyle = gradBottom;
         ctx.fillRect(0, height * 0.5, width, height * 0.5);
       }
@@ -238,14 +240,119 @@ export const renderSlideToCanvas = async (
 
     const activeFont = isFirst ? config.fontPair.header : config.fontPair.body;
     const headerFont = config.fontPair.header;
+    const subtitleFont = isFirst ? config.firstSubtitleFont : config.fontPair.body;
     const bodyFont = config.fontPair.body;
     const lineHeightScale = config.fontSizes.lineHeight;
     const isBgEnabled = isFirst ? config.textBackground.enabledFirst : config.textBackground.enabledMiddle;
     
     let baseFontSize = isFirst ? config.fontSizes.first : config.fontSizes.middle;
+    const subtitleSize = isFirst ? config.fontSizes.firstSubtitleSize : baseFontSize;
     const minFontSize = 30;
     
-    if (headerText) {
+    if (isFirst && slide.paragraphs && slide.paragraphs.length > 0) {
+      // Group paragraphs by verticalOffset
+      const groups: { offset: number, paras: { text: string, originalIdx: number }[] }[] = [];
+      slide.paragraphs.forEach((p, idx) => {
+        const group = groups.find(g => g.offset === p.verticalOffset);
+        if (group) group.paras.push({ text: p.text, originalIdx: idx });
+        else groups.push({ offset: p.verticalOffset, paras: [{ text: p.text, originalIdx: idx }] });
+      });
+
+      groups.forEach(group => {
+        let groupTotalHeight = 0;
+        const groupLayouts = group.paras.map(gp => {
+          let currentFontSize = baseFontSize;
+          let currentFont = activeFont;
+          let currentOpacity = 100;
+          let isBold = false;
+
+          if (gp.originalIdx === 0) {
+            currentFont = headerFont;
+            currentFontSize = baseFontSize;
+            isBold = true;
+          } else if (gp.originalIdx === 1) {
+            currentFont = subtitleFont;
+            currentFontSize = subtitleSize;
+            currentOpacity = config.firstSubtitleOpacity;
+          } else {
+            currentFont = bodyFont;
+            currentFontSize = config.fontSizes.middle;
+          }
+
+          let layout = getWrappedLines(ctx, gp.text, maxWidth, currentFontSize, currentFont, lineHeightScale, config.format);
+          while (layout.totalHeight > height * 0.5 && currentFontSize > minFontSize) {
+            currentFontSize -= 2;
+            layout = getWrappedLines(ctx, gp.text, maxWidth, currentFontSize, currentFont, lineHeightScale, config.format);
+          }
+          groupTotalHeight += layout.totalHeight;
+          return { gp, layout, currentFontSize, currentFont, currentOpacity, isBold };
+        });
+
+        const py = Math.max(textStartYLimit, Math.min(textEndYLimit - groupTotalHeight, (height * (group.offset + (config.fontSizes.verticalOffset - 50)) / 100) - (groupTotalHeight / 2)));
+        
+        ctx.textBaseline = 'top';
+        let currentY = py;
+        groupLayouts.forEach(gl => {
+          gl.layout.lines.forEach((line: any) => {
+            let x = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
+            let lineWidth = 0;
+            line.parts.forEach((p: any) => {
+              ctx.font = `${(p.bold || gl.isBold) ? '700' : '400'} ${gl.currentFontSize}px "${gl.currentFont}"`;
+              lineWidth += ctx.measureText(p.text).width;
+            });
+
+            if (isBgEnabled) {
+              const bg = config.textBackground;
+              const padding = bg.padding;
+              const radius = bg.borderRadius;
+              const r = parseInt(bg.color.slice(1, 3), 16);
+              const g = parseInt(bg.color.slice(3, 5), 16);
+              const b = parseInt(bg.color.slice(5, 7), 16);
+              ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${bg.opacity / 100})`;
+              
+              let bgX = x;
+              if (config.alignment === Alignment.CENTER) bgX -= lineWidth / 2;
+              
+              ctx.beginPath();
+              ctx.roundRect(bgX - padding, currentY - padding, lineWidth + padding * 2, gl.currentFontSize * lineHeightScale + padding * 2, radius);
+              ctx.fill();
+            }
+
+            if (config.alignment === Alignment.CENTER) {
+              let tempX = x - lineWidth / 2;
+              ctx.textAlign = 'left';
+              line.parts.forEach((p: any) => {
+                ctx.font = `${(p.bold || gl.isBold) ? '700' : '400'} ${gl.currentFontSize}px "${gl.currentFont}"`;
+                const baseColor = p.color || config.textColor;
+                const r = parseInt(baseColor.slice(1, 3), 16);
+                const g = parseInt(baseColor.slice(3, 5), 16);
+                const b = parseInt(baseColor.slice(5, 7), 16);
+                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${gl.currentOpacity / 100})`;
+                ctx.fillText(p.text, tempX, currentY);
+                tempX += ctx.measureText(p.text).width;
+              });
+            } else {
+              ctx.textAlign = 'left';
+              let tempX = x;
+              line.parts.forEach((p: any) => {
+                ctx.font = `${(p.bold || gl.isBold) ? '700' : '400'} ${gl.currentFontSize}px "${gl.currentFont}"`;
+                const baseColor = p.color || config.textColor;
+                const r = parseInt(baseColor.slice(1, 3), 16);
+                const g = parseInt(baseColor.slice(3, 5), 16);
+                const b = parseInt(baseColor.slice(5, 7), 16);
+                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${gl.currentOpacity / 100})`;
+                ctx.fillText(p.text, tempX, currentY);
+                tempX += ctx.measureText(p.text).width;
+              });
+            }
+            currentY += gl.currentFontSize * lineHeightScale;
+            if (line.isParagraphEnd && config.format === SlideFormat.PLAN) {
+              currentY += gl.currentFontSize * (lineHeightScale - 1);
+            }
+          });
+        });
+      });
+    } else if (config.format === SlideFormat.POINT_EXPLAIN && headerText) {
       // POINT_EXPLAIN format logic remains mostly same but we could apply background
       let finalHeadLayout: any = null;
       let finalBodyLayout: any = null;
@@ -277,20 +384,6 @@ export const renderSlideToCanvas = async (
       const startY = Math.max(textStartYLimit, Math.min(textEndYLimit - totalH, (height * config.fontSizes.verticalOffset / 100) - (totalH / 2)));
       let curY = startY;
 
-      if (isBgEnabled) {
-        const bg = config.textBackground;
-        const padding = bg.padding;
-        const radius = bg.borderRadius;
-        // Convert hex to rgba with opacity
-        const r = parseInt(bg.color.slice(1, 3), 16);
-        const g = parseInt(bg.color.slice(3, 5), 16);
-        const b = parseInt(bg.color.slice(5, 7), 16);
-        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${bg.opacity / 100})`;
-        ctx.beginPath();
-        ctx.roundRect(safeMargin - padding, startY - padding, maxWidth + padding * 2, totalH + padding * 2, radius);
-        ctx.fill();
-      }
-
       ctx.textBaseline = 'top';
       finalHeadLayout.lines.forEach(l => {
         let lx = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
@@ -298,12 +391,33 @@ export const renderSlideToCanvas = async (
         
         ctx.font = `700 ${headSize}px "${headerFont}"`;
         ctx.fillStyle = config.textColor;
+
+        const lineWidth = ctx.measureText(lineText).width;
+
+        if (isBgEnabled) {
+          const bg = config.textBackground;
+          const padding = bg.padding;
+          const radius = bg.borderRadius;
+          const r = parseInt(bg.color.slice(1, 3), 16);
+          const g = parseInt(bg.color.slice(3, 5), 16);
+          const b = parseInt(bg.color.slice(5, 7), 16);
+          ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${bg.opacity / 100})`;
+          
+          let bgX = lx;
+          if (config.alignment === Alignment.CENTER) bgX -= lineWidth / 2;
+          
+          ctx.beginPath();
+          ctx.roundRect(bgX - padding, curY - padding, lineWidth + padding * 2, headSize * 1.25 + padding * 2, radius);
+          ctx.fill();
+        }
         
         if (config.alignment === Alignment.CENTER) {
           ctx.textAlign = 'center';
+          ctx.fillStyle = config.textColor;
           ctx.fillText(lineText, lx, curY);
         } else {
           ctx.textAlign = 'left';
+          ctx.fillStyle = config.textColor;
           ctx.fillText(lineText, lx, curY);
         }
         curY += headSize * 1.25;
@@ -313,16 +427,31 @@ export const renderSlideToCanvas = async (
       
       finalBodyLayout.lines.forEach(l => {
         let lx = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
+        let lineWidth = 0;
+        l.parts.forEach((p: any) => {
+          ctx.font = `${p.bold ? '700' : '400'} ${baseFontSize}px "${bodyFont}"`;
+          lineWidth += ctx.measureText(p.text).width;
+        });
+
+        if (isBgEnabled) {
+          const bg = config.textBackground;
+          const padding = bg.padding;
+          const radius = bg.borderRadius;
+          const r = parseInt(bg.color.slice(1, 3), 16);
+          const g = parseInt(bg.color.slice(3, 5), 16);
+          const b = parseInt(bg.color.slice(5, 7), 16);
+          ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${bg.opacity / 100})`;
+          
+          let bgX = lx;
+          if (config.alignment === Alignment.CENTER) bgX -= lineWidth / 2;
+          
+          ctx.beginPath();
+          ctx.roundRect(bgX - padding, curY - padding, lineWidth + padding * 2, baseFontSize * lineHeightScale + padding * 2, radius);
+          ctx.fill();
+        }
         
         if (config.alignment === Alignment.CENTER) {
-          // Calculate total width for centered rich text
-          let totalW = 0;
-          l.parts.forEach((p: any) => {
-            ctx.font = `${p.bold ? '700' : '400'} ${baseFontSize}px "${bodyFont}"`;
-            totalW += ctx.measureText(p.text).width;
-          });
-          
-          let tempX = lx - totalW / 2;
+          let tempX = lx - lineWidth / 2;
           ctx.textAlign = 'left';
           l.parts.forEach((p: any) => {
             ctx.font = `${p.bold ? '700' : '400'} ${baseFontSize}px "${bodyFont}"`;
@@ -343,63 +472,81 @@ export const renderSlideToCanvas = async (
         curY += baseFontSize * lineHeightScale;
       });
     } else if (slide.paragraphs && slide.paragraphs.length > 0) {
-      // Individual Paragraph Positioning
-      slide.paragraphs.forEach(para => {
-        let currentFontSize = baseFontSize;
-        let layout = getWrappedLines(ctx, para.text, maxWidth, currentFontSize, activeFont, lineHeightScale, config.format);
-        
-        while (layout.totalHeight > height * 0.4 && currentFontSize > minFontSize) {
-          currentFontSize -= 2;
-          layout = getWrappedLines(ctx, para.text, maxWidth, currentFontSize, activeFont, lineHeightScale, config.format);
-        }
+      // Group paragraphs by verticalOffset
+      const groups: { offset: number, paras: { text: string }[] }[] = [];
+      slide.paragraphs.forEach(p => {
+        const group = groups.find(g => g.offset === p.verticalOffset);
+        if (group) group.paras.push({ text: p.text });
+        else groups.push({ offset: p.verticalOffset, paras: [{ text: p.text }] });
+      });
 
-        const py = Math.max(textStartYLimit, Math.min(textEndYLimit - layout.totalHeight, (height * para.verticalOffset / 100) - (layout.totalHeight / 2)));
-        
-        if (isBgEnabled) {
-          const bg = config.textBackground;
-          const padding = bg.padding;
-          const radius = bg.borderRadius;
-          const r = parseInt(bg.color.slice(1, 3), 16);
-          const g = parseInt(bg.color.slice(3, 5), 16);
-          const b = parseInt(bg.color.slice(5, 7), 16);
-          ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${bg.opacity / 100})`;
-          ctx.beginPath();
-          ctx.roundRect(safeMargin - padding, py - padding, maxWidth + padding * 2, layout.totalHeight + padding * 2, radius);
-          ctx.fill();
-        }
-
-        ctx.textBaseline = 'top';
-        let lineY = py;
-        layout.lines.forEach((line: any) => {
-          let x = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
-          
-          if (config.alignment === Alignment.CENTER) {
-            // Calculate total width for centered rich text
-            let totalW = 0;
-            line.parts.forEach((p: any) => {
-              ctx.font = `${p.bold ? '700' : '400'} ${currentFontSize}px "${activeFont}"`;
-              totalW += ctx.measureText(p.text).width;
-            });
-            
-            let tempX = x - totalW / 2;
-            ctx.textAlign = 'left';
-            line.parts.forEach((p: any) => {
-              ctx.font = `${p.bold ? '700' : '400'} ${currentFontSize}px "${activeFont}"`;
-              ctx.fillStyle = p.color || config.textColor;
-              ctx.fillText(p.text, tempX, lineY);
-              tempX += ctx.measureText(p.text).width;
-            });
-          } else {
-            ctx.textAlign = 'left';
-            let tempX = x;
-            line.parts.forEach((p: any) => {
-              ctx.font = `${p.bold ? '700' : '400'} ${currentFontSize}px "${activeFont}"`;
-              ctx.fillStyle = p.color || config.textColor;
-              ctx.fillText(p.text, tempX, lineY);
-              tempX += ctx.measureText(p.text).width;
-            });
+      groups.forEach(group => {
+        let groupTotalHeight = 0;
+        const groupLayouts = group.paras.map(gp => {
+          let currentFontSize = baseFontSize;
+          let layout = getWrappedLines(ctx, gp.text, maxWidth, currentFontSize, activeFont, lineHeightScale, config.format);
+          while (layout.totalHeight > height * 0.5 && currentFontSize > minFontSize) {
+            currentFontSize -= 2;
+            layout = getWrappedLines(ctx, gp.text, maxWidth, currentFontSize, activeFont, lineHeightScale, config.format);
           }
-          lineY += currentFontSize * lineHeightScale;
+          groupTotalHeight += layout.totalHeight;
+          return { gp, layout, currentFontSize };
+        });
+
+        const py = Math.max(textStartYLimit, Math.min(textEndYLimit - groupTotalHeight, (height * (group.offset + (config.fontSizes.verticalOffset - 50)) / 100) - (groupTotalHeight / 2)));
+        
+        ctx.textBaseline = 'top';
+        let currentY = py;
+        groupLayouts.forEach(gl => {
+          gl.layout.lines.forEach((line: any) => {
+            let x = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
+            let lineWidth = 0;
+            line.parts.forEach((p: any) => {
+              ctx.font = `${p.bold ? '700' : '400'} ${gl.currentFontSize}px "${activeFont}"`;
+              lineWidth += ctx.measureText(p.text).width;
+            });
+
+            if (isBgEnabled) {
+              const bg = config.textBackground;
+              const padding = bg.padding;
+              const radius = bg.borderRadius;
+              const r = parseInt(bg.color.slice(1, 3), 16);
+              const g = parseInt(bg.color.slice(3, 5), 16);
+              const b = parseInt(bg.color.slice(5, 7), 16);
+              ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${bg.opacity / 100})`;
+              
+              let bgX = x;
+              if (config.alignment === Alignment.CENTER) bgX -= lineWidth / 2;
+              
+              ctx.beginPath();
+              ctx.roundRect(bgX - padding, currentY - padding, lineWidth + padding * 2, gl.currentFontSize * lineHeightScale + padding * 2, radius);
+              ctx.fill();
+            }
+
+            if (config.alignment === Alignment.CENTER) {
+              let tempX = x - lineWidth / 2;
+              ctx.textAlign = 'left';
+              line.parts.forEach((p: any) => {
+                ctx.font = `${p.bold ? '700' : '400'} ${gl.currentFontSize}px "${activeFont}"`;
+                ctx.fillStyle = p.color || config.textColor;
+                ctx.fillText(p.text, tempX, currentY);
+                tempX += ctx.measureText(p.text).width;
+              });
+            } else {
+              ctx.textAlign = 'left';
+              let tempX = x;
+              line.parts.forEach((p: any) => {
+                ctx.font = `${p.bold ? '700' : '400'} ${gl.currentFontSize}px "${activeFont}"`;
+                ctx.fillStyle = p.color || config.textColor;
+                ctx.fillText(p.text, tempX, currentY);
+                tempX += ctx.measureText(p.text).width;
+              });
+            }
+            currentY += gl.currentFontSize * lineHeightScale;
+            if (line.isParagraphEnd && config.format === SlideFormat.PLAN) {
+              currentY += gl.currentFontSize * (lineHeightScale - 1);
+            }
+          });
         });
       });
     } else {
@@ -418,31 +565,34 @@ export const renderSlideToCanvas = async (
       const startY = Math.max(textStartYLimit, Math.min(textEndYLimit - finalLayout.totalHeight, (height * config.fontSizes.verticalOffset / 100) - (finalLayout.totalHeight / 2)));
       let y = startY;
 
-      if (isBgEnabled) {
-        const bg = config.textBackground;
-        const padding = bg.padding;
-        const radius = bg.borderRadius;
-        const r = parseInt(bg.color.slice(1, 3), 16);
-        const g = parseInt(bg.color.slice(3, 5), 16);
-        const b = parseInt(bg.color.slice(5, 7), 16);
-        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${bg.opacity / 100})`;
-        ctx.beginPath();
-        ctx.roundRect(safeMargin - padding, startY - padding, maxWidth + padding * 2, finalLayout.totalHeight + padding * 2, radius);
-        ctx.fill();
-      }
-
       ctx.textBaseline = 'top';
       finalLayout.lines.forEach((line: any) => {
         let x = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
         let lineWidth = 0;
         
-        if (config.alignment !== Alignment.LEFT) {
-          line.parts.forEach((p: TextPart) => {
-            ctx.font = `${p.bold ? '700' : '400'} ${baseFontSize}px "${activeFont}"`;
-            lineWidth += ctx.measureText(p.text).width;
-          });
-          if (config.alignment === Alignment.CENTER) x -= lineWidth / 2;
+        line.parts.forEach((p: TextPart) => {
+          ctx.font = `${p.bold ? '700' : '400'} ${baseFontSize}px "${activeFont}"`;
+          lineWidth += ctx.measureText(p.text).width;
+        });
+
+        if (isBgEnabled) {
+          const bg = config.textBackground;
+          const padding = bg.padding;
+          const radius = bg.borderRadius;
+          const r = parseInt(bg.color.slice(1, 3), 16);
+          const g = parseInt(bg.color.slice(3, 5), 16);
+          const b = parseInt(bg.color.slice(5, 7), 16);
+          ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${bg.opacity / 100})`;
+          
+          let bgX = x;
+          if (config.alignment === Alignment.CENTER) bgX -= lineWidth / 2;
+          
+          ctx.beginPath();
+          ctx.roundRect(bgX - padding, y - padding, lineWidth + padding * 2, baseFontSize * lineHeightScale + padding * 2, radius);
+          ctx.fill();
         }
+
+        if (config.alignment === Alignment.CENTER) x -= lineWidth / 2;
         ctx.textAlign = 'left';
 
         line.parts.forEach((p: TextPart) => {
