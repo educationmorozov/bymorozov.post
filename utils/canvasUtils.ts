@@ -134,6 +134,7 @@ export const renderSlideToCanvas = async (
   let oType = config.overlayType;
   let oIntensity = config.overlayIntensity / 100;
   let oOffset = config.overlayOffset;
+  let oColor = config.overlayColor;
 
   if (config.bgMode === 'single') {
     bgUrl = config.bgImageUrl;
@@ -142,6 +143,7 @@ export const renderSlideToCanvas = async (
     oType = slide.overlayType || config.overlayType;
     oIntensity = (slide.overlayIntensity ?? config.overlayIntensity) / 100;
     oOffset = slide.overlayOffset ?? config.overlayOffset;
+    oColor = slide.overlayColor || config.overlayColor;
   }
 
   if (bgUrl) {
@@ -157,31 +159,36 @@ export const renderSlideToCanvas = async (
       ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
       ctx.restore();
 
+      const r = parseInt(oColor.slice(1, 3), 16);
+      const g = parseInt(oColor.slice(3, 5), 16);
+      const b = parseInt(oColor.slice(5, 7), 16);
+      const colorStr = `${r},${g},${b}`;
+
       if (oType === OverlayType.FULL) {
-        ctx.fillStyle = `rgba(0,0,0,${oIntensity})`;
+        ctx.fillStyle = `rgba(${colorStr},${oIntensity})`;
         ctx.fillRect(0, 0, width, height);
       } else if (oType === OverlayType.TOP) {
         const grad = ctx.createLinearGradient(0, 0, 0, height * (oOffset / 100) * 1.4);
-        grad.addColorStop(0, `rgba(0,0,0,${oIntensity})`);
-        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        grad.addColorStop(0, `rgba(${colorStr},${oIntensity})`);
+        grad.addColorStop(1, `rgba(${colorStr},0)`);
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, width, height);
       } else if (oType === OverlayType.BOTTOM) {
         const grad = ctx.createLinearGradient(0, height * (1 - (oOffset / 100) * 1.4), 0, height);
-        grad.addColorStop(0, 'rgba(0,0,0,0)');
-        grad.addColorStop(1, `rgba(0,0,0,${oIntensity})`);
+        grad.addColorStop(0, `rgba(${colorStr},0)`);
+        grad.addColorStop(1, `rgba(${colorStr},${oIntensity})`);
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, width, height);
       } else if (oType === OverlayType.BOTH) {
         const gradTop = ctx.createLinearGradient(0, 0, 0, height * 0.4);
-        gradTop.addColorStop(0, `rgba(0,0,0,${oIntensity})`);
-        gradTop.addColorStop(1, 'rgba(0,0,0,0)');
+        gradTop.addColorStop(0, `rgba(${colorStr},${oIntensity})`);
+        gradTop.addColorStop(1, `rgba(${colorStr},0)`);
         ctx.fillStyle = gradTop;
         ctx.fillRect(0, 0, width, height * 0.5);
         
         const gradBottom = ctx.createLinearGradient(0, height * 0.6, 0, height);
-        gradBottom.addColorStop(0, 'rgba(0,0,0,0)');
-        gradBottom.addColorStop(1, `rgba(0,0,0,${oIntensity})`);
+        gradBottom.addColorStop(0, `rgba(${colorStr},0)`);
+        gradBottom.addColorStop(1, `rgba(${colorStr},${oIntensity})`);
         ctx.fillStyle = gradBottom;
         ctx.fillRect(0, height * 0.5, width, height * 0.5);
       }

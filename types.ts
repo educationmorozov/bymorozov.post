@@ -60,6 +60,7 @@ export interface DesignConfig {
   bgMode: 'single' | 'multiple';
   overlayType: OverlayType;
   overlayIntensity: number;
+  overlayColor: string;
   overlayOffset: number;
   alignment: Alignment;
   fontPair: {
@@ -113,5 +114,6 @@ export interface SlideData {
   bgImageUrl?: string | null;
   overlayType?: OverlayType;
   overlayIntensity?: number; // 0-100
+  overlayColor?: string;
   overlayOffset?: number; // 0-100
 }

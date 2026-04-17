@@ -47,6 +47,7 @@ const App: React.FC = () => {
     bgMode: 'single',
     overlayType: OverlayType.FULL,
     overlayIntensity: 45,
+    overlayColor: '#000000',
     overlayOffset: 50,
     alignment: Alignment.LEFT,
     fontPair: FONT_PAIRS[0],
@@ -92,6 +93,7 @@ const App: React.FC = () => {
           bgImageUrl: existing?.bgImageUrl || null,
           overlayType: existing?.overlayType || OverlayType.FULL,
           overlayIntensity: existing?.overlayIntensity ?? 45,
+          overlayColor: existing?.overlayColor ?? '#000000',
           overlayOffset: existing?.overlayOffset ?? 50
         };
       });
@@ -294,20 +296,28 @@ const App: React.FC = () => {
                                 <button onClick={() => setConfig(c => ({...c, bgImageUrl: null}))} className="absolute top-2 right-2 bg-black/50 p-1 rounded-full hover:bg-black transition-all"><X size={14}/></button>
                               </div>
                               
-                              <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                  <span className="text-[9px] text-zinc-500 font-bold uppercase">Затемнение</span>
-                                  <div className="grid grid-cols-2 gap-1">
-                                    {Object.values(OverlayType).map(ot => (
-                                      <button key={ot} onClick={() => setConfig(c => ({...c, overlayType: ot}))} className={`py-1.5 rounded-lg border text-[8px] font-bold ${config.overlayType === ot ? 'bg-white text-black border-white' : 'bg-black border-zinc-800 text-zinc-500'}`}>{ot}</button>
-                                    ))}
-                                  </div>
-                                </div>
-                                <div className="space-y-2">
-                                  <div className="flex justify-between"><span className="text-[9px] text-zinc-500 font-bold uppercase">Сила</span><span className="text-[9px] text-zinc-300 font-bold">{config.overlayIntensity}%</span></div>
-                                  <input type="range" min="0" max="100" value={config.overlayIntensity} onChange={e => setConfig(c => ({...c, overlayIntensity: parseInt(e.target.value)}))} className="w-full accent-white" />
-                                </div>
-                              </div>
+                               <div className="grid grid-cols-2 gap-4">
+                                 <div className="space-y-2">
+                                   <span className="text-[9px] text-zinc-500 font-bold uppercase">Затемнение</span>
+                                   <div className="grid grid-cols-2 gap-1">
+                                     {Object.values(OverlayType).map(ot => (
+                                       <button key={ot} onClick={() => setConfig(c => ({...c, overlayType: ot}))} className={`py-1.5 rounded-lg border text-[8px] font-bold ${config.overlayType === ot ? 'bg-white text-black border-white' : 'bg-black border-zinc-800 text-zinc-500'}`}>{ot}</button>
+                                     ))}
+                                   </div>
+                                 </div>
+                                 <div className="space-y-2">
+                                   <div className="flex justify-between">
+                                     <span className="text-[9px] text-zinc-500 font-bold uppercase">Сила и Цвет</span>
+                                     <span className="text-[9px] text-zinc-300 font-bold">{config.overlayIntensity}%</span>
+                                   </div>
+                                   <div className="flex gap-2 items-center">
+                                      <input type="range" min="0" max="100" value={config.overlayIntensity} onChange={e => setConfig(c => ({...c, overlayIntensity: parseInt(e.target.value)}))} className="flex-1 accent-white" />
+                                      <div className="relative flex items-center bg-black border border-zinc-800 rounded px-1">
+                                        <input type="color" value={config.overlayColor} onChange={e => setConfig(c => ({...c, overlayColor: e.target.value}))} className="w-5 h-5 bg-transparent cursor-pointer border-none p-0" />
+                                      </div>
+                                   </div>
+                                 </div>
+                               </div>
                             </div>
                           )}
                         </div>
@@ -351,8 +361,16 @@ const App: React.FC = () => {
                                       </div>
                                     </div>
                                     <div className="space-y-1.5">
-                                      <div className="flex justify-between"><span className="text-[8px] text-zinc-600 uppercase font-bold">Сила</span><span className="text-[8px] text-zinc-400">{slide.overlayIntensity}%</span></div>
-                                      <input type="range" min="0" max="100" value={slide.overlayIntensity} onChange={e => setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, overlayIntensity: parseInt(e.target.value) } : s))} className="w-full accent-white" />
+                                      <div className="flex justify-between">
+                                        <span className="text-[8px] text-zinc-600 uppercase font-bold">Сила и Цвет</span>
+                                        <span className="text-[8px] text-zinc-400">{slide.overlayIntensity}%</span>
+                                      </div>
+                                      <div className="flex gap-1.5 items-center">
+                                        <input type="range" min="0" max="100" value={slide.overlayIntensity} onChange={e => setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, overlayIntensity: parseInt(e.target.value) } : s))} className="flex-1 accent-white" />
+                                        <div className="relative flex items-center bg-black border border-zinc-800 rounded px-1">
+                                          <input type="color" value={slide.overlayColor || '#000000'} onChange={e => setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, overlayColor: e.target.value } : s))} className="w-4 h-4 bg-transparent cursor-pointer border-none p-0" />
+                                        </div>
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
