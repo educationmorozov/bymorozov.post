@@ -10,6 +10,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@google/genai": "^1.50.1",
     "heic2any": "^0.0.4",
     "jszip": "3.10.1",
     "lucide-react": "0.460.0",

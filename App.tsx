@@ -12,10 +12,16 @@ import { renderSlideToCanvas, saveBlob } from './utils/canvasUtils.ts';
 
 const FONT_PAIRS = [
   { name: 'Unbounded + Manrope', header: 'Unbounded', body: 'Manrope' },
-  { name: 'Montserrat Alternates + Verdana', header: 'Montserrat Alternates', body: 'Verdana' },
-  { name: 'DM Sans + Trebuchet MS', header: 'DM Sans', body: 'Trebuchet MS' },
-  { name: 'Montserrat + Inter', header: 'Montserrat', body: 'Inter' },
-  { name: 'Impact + Manrope', header: 'Impact', body: 'Manrope' },
+  { name: 'Shantel Sans + Inter', header: 'Shantel Sans', body: 'Inter' },
+  { name: 'Victor Mono + Manrope', header: 'Victor Mono', body: 'Manrope' },
+  { name: 'Science Gothic + Inter', header: 'Science Gothic', body: 'Inter' },
+  { name: 'LXGW WenKai + JetBrains Mono', header: 'LXGW WenKai Mono TC', body: 'JetBrains Mono' },
+  { name: 'Inter + Verdana', header: 'Inter', body: 'Verdana' },
+  { name: 'Inter + JetBrains Mono', header: 'Inter', body: 'JetBrains Mono' },
+  { name: 'Lora + Manrope', header: 'Lora', body: 'Manrope' },
+  { name: 'Vollkorn + Nunito Sans', header: 'Vollkorn', body: 'Nunito Sans' },
+  { name: 'PT Sans + PT Serif', header: 'PT Sans', body: 'PT Serif' },
+  { name: 'Ubuntu + PT Sans', header: 'Ubuntu', body: 'PT Sans' },
   { name: 'Свой шрифт', header: 'Inter', body: 'Inter', isCustom: true },
 ];
 
@@ -26,8 +32,8 @@ const PRESETS = [
   { name: 'Благородный бордо', bg: '#55121B', text: '#FEFAEF' },
 ];
 
-const HEADER_FONTS = ['Unbounded', 'Impact', 'Montserrat', 'Montserrat Alternates', 'Golos Text', 'Inter', 'DM Sans', 'Oswald', 'Rubik Mono One', 'Russo One', 'Kelly Slab', 'Tenor Sans', 'Roboto', 'Ubuntu'];
-const BODY_FONTS = ['Inter', 'Manrope', 'Verdana', 'Trebuchet MS', 'Arial', 'Georgia', 'Open Sans', 'Roboto', 'Lato', 'Raleway', 'Ubuntu', 'PT Sans', 'PT Serif', 'Lora', 'Noto Sans'];
+const HEADER_FONTS = ['Unbounded', 'Inter', 'Shantel Sans', 'Victor Mono', 'Science Gothic', 'LXGW WenKai Mono TC', 'Rubik Mono One', 'Russo One', 'Kelly Slab', 'Tenor Sans', 'Roboto', 'Ubuntu', 'Vollkorn', 'PT Sans'];
+const BODY_FONTS = ['Inter', 'Manrope', 'Verdana', 'Arial', 'Georgia', 'Open Sans', 'Roboto', 'Lato', 'Raleway', 'Ubuntu', 'PT Sans', 'PT Serif', 'Lora', 'Noto Sans', 'Mulish', 'Nunito Sans', 'JetBrains Mono'];
 
 const App: React.FC = () => {
   const [step, setStep] = useState(1);
@@ -43,6 +49,8 @@ const App: React.FC = () => {
     format: SlideFormat.NORMAL,
     customColor: '#000000',
     textColor: '#ffffff',
+    accentColor: '#FF6B00',
+    secondaryAccentColor: '#FFD600',
     bgImageUrl: null,
     bgMode: 'single',
     overlayType: OverlayType.FULL,
@@ -56,7 +64,7 @@ const App: React.FC = () => {
     nickPosition: NickPosition.BOTTOM_LEFT,
     numbering: { enabled: true, position: 'bottom-right' },
     sizes: { first: AspectRatio.PORTRAIT, middle: AspectRatio.PORTRAIT, last: AspectRatio.PORTRAIT },
-    fontSizes: { first: 80, middle: 64, last: 64, lineHeight: 1.35, verticalOffset: 50, firstSubtitleSize: 40 },
+    fontSizes: { first: 80, middle: 72, last: 72, lineHeight: 1.35, verticalOffset: 50, firstSubtitleSize: 58 },
     firstSubtitleOpacity: 70,
     firstSubtitleFont: BODY_FONTS[0],
     textBackground: { enabledFirst: false, enabledMiddle: false, color: '#000000', opacity: 50, borderRadius: 20, padding: 30 },
@@ -220,7 +228,15 @@ const App: React.FC = () => {
                 <h2 className="text-xl font-bold uppercase tracking-tight">ШАГ 2: выберите формат</h2>
                 <div className="grid grid-cols-2 gap-2">
                   {Object.values(SlideFormat).map(f => (
-                    <button key={f} onClick={() => handleFormatChange(f)} className={`p-4 rounded-xl border text-xs font-bold text-left h-20 transition-all ${config.format === f ? 'bg-white text-black border-white' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}>{f}</button>
+                    <button 
+                      key={f} 
+                      onClick={() => handleFormatChange(f)} 
+                      className={`p-4 rounded-xl border text-xs font-bold text-left h-20 transition-all flex items-center justify-between group ${config.format === f ? 'bg-white text-black border-white' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}
+                    >
+                      <div className="flex flex-col gap-1">
+                        <span>{f}</span>
+                      </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -256,6 +272,20 @@ const App: React.FC = () => {
                         <div className="flex gap-2">
                           <input type="color" value={config.textColor} onChange={e => setConfig(c => ({...c, textColor: e.target.value}))} className="w-8 h-8 bg-black border border-zinc-800 rounded cursor-pointer" />
                           <input type="text" value={config.textColor} onChange={e => setConfig(c => ({...c, textColor: e.target.value}))} className="flex-1 bg-black border border-zinc-800 p-1 rounded text-[9px] font-mono text-white" placeholder="#FFFFFF" />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <span className="text-[9px] text-zinc-500 font-bold uppercase">Акцент 1</span>
+                        <div className="flex gap-2">
+                          <input type="color" value={config.accentColor} onChange={e => setConfig(c => ({...c, accentColor: e.target.value}))} className="w-8 h-8 bg-black border border-zinc-800 rounded cursor-pointer" />
+                          <input type="text" value={config.accentColor} onChange={e => setConfig(c => ({...c, accentColor: e.target.value}))} className="flex-1 bg-black border border-zinc-800 p-1 rounded text-[9px] font-mono text-white" placeholder="#FF6B00" />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <span className="text-[9px] text-zinc-500 font-bold uppercase">Акцент 2</span>
+                        <div className="flex gap-2">
+                          <input type="color" value={config.secondaryAccentColor} onChange={e => setConfig(c => ({...c, secondaryAccentColor: e.target.value}))} className="w-8 h-8 bg-black border border-zinc-800 rounded cursor-pointer" />
+                          <input type="text" value={config.secondaryAccentColor} onChange={e => setConfig(c => ({...c, secondaryAccentColor: e.target.value}))} className="flex-1 bg-black border border-zinc-800 p-1 rounded text-[9px] font-mono text-white" placeholder="#FFD600" />
                         </div>
                       </div>
                     </div>

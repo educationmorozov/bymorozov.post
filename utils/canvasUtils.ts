@@ -12,6 +12,24 @@ export const saveBlob = (blob: Blob, fileName: string) => {
   URL.revokeObjectURL(url);
 };
 
+const ensureFontsLoaded = async (headerFont: string, bodyFont: string) => {
+  try {
+    const testString = "АБВГД abc 123";
+    await Promise.all([
+      document.fonts.load(`700 16px "${headerFont}"`, testString),
+      document.fonts.load(`400 16px "${headerFont}"`, testString),
+      document.fonts.load(`700 16px "Shantel Sans"`, testString),
+      document.fonts.load(`700 16px "Victor Mono"`, testString),
+      document.fonts.load(`700 16px "Science Gothic"`, testString),
+      document.fonts.load(`400 16px "${bodyFont}"`, testString),
+      document.fonts.load(`700 16px "${bodyFont}"`, testString),
+      document.fonts.load(`500 16px "${bodyFont}"`, testString)
+    ]);
+  } catch (e) {
+    console.warn("Font loading timeout or error", e);
+  }
+};
+
 interface TextPart {
   text: string;
   bold: boolean;
@@ -126,6 +144,8 @@ export const renderSlideToCanvas = async (
   const height = canvas.height;
   const safeMargin = 130;
   const maxWidth = width - safeMargin * 2;
+  
+  await ensureFontsLoaded(config.fontPair.header, config.fontPair.body);
 
   ctx.fillStyle = config.customColor;
   ctx.fillRect(0, 0, width, height);
@@ -366,9 +386,10 @@ export const renderSlideToCanvas = async (
       let currentFontSize = baseFontSize;
 
       while (currentFontSize >= minFontSize) {
-        const headSize = currentFontSize * 1.3;
+        const headSize = currentFontSize;
+        const bodySize = currentFontSize / 1.5;
         const headLayout = getWrappedLines(ctx, headerText, maxWidth, headSize, headerFont, 1.25);
-        const bodyLayout = getWrappedLines(ctx, textToRender, maxWidth, currentFontSize, bodyFont, lineHeightScale, config.format);
+        const bodyLayout = getWrappedLines(ctx, textToRender, maxWidth, bodySize, bodyFont, lineHeightScale, config.format);
         
         const totalH = headLayout.totalHeight + 50 + bodyLayout.totalHeight;
         if (totalH <= availableHeight) {
@@ -381,12 +402,13 @@ export const renderSlideToCanvas = async (
       }
 
       if (!finalHeadLayout) {
-        finalHeadLayout = getWrappedLines(ctx, headerText, maxWidth, minFontSize * 1.3, headerFont, 1.25);
-        finalBodyLayout = getWrappedLines(ctx, textToRender, maxWidth, minFontSize, bodyFont, lineHeightScale, config.format);
+        finalHeadLayout = getWrappedLines(ctx, headerText, maxWidth, minFontSize, headerFont, 1.25);
+        finalBodyLayout = getWrappedLines(ctx, textToRender, maxWidth, minFontSize * 0.5, bodyFont, lineHeightScale, config.format);
         baseFontSize = minFontSize;
       }
 
-      const headSize = baseFontSize * 1.3;
+      const headSize = baseFontSize;
+      const bodySize = baseFontSize / 1.5;
       const totalH = finalHeadLayout.totalHeight + 50 + finalBodyLayout.totalHeight;
       const startY = Math.max(textStartYLimit, Math.min(textEndYLimit - totalH, (height * config.fontSizes.verticalOffset / 100) - (totalH / 2)));
       let curY = startY;
@@ -432,11 +454,11 @@ export const renderSlideToCanvas = async (
 
       curY += 50;
       
-      finalBodyLayout.lines.forEach(l => {
+      finalBodyLayout.lines.forEach((l: any) => {
         let lx = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
         let lineWidth = 0;
         l.parts.forEach((p: any) => {
-          ctx.font = `${p.bold ? '700' : '400'} ${baseFontSize}px "${bodyFont}"`;
+          ctx.font = `${p.bold ? '700' : '400'} ${bodySize}px "${bodyFont}"`;
           lineWidth += ctx.measureText(p.text).width;
         });
 
@@ -453,7 +475,7 @@ export const renderSlideToCanvas = async (
           if (config.alignment === Alignment.CENTER) bgX -= lineWidth / 2;
           
           ctx.beginPath();
-          ctx.roundRect(bgX - padding, curY - padding, lineWidth + padding * 2, baseFontSize * lineHeightScale + padding * 2, radius);
+          ctx.roundRect(bgX - padding, curY - padding, lineWidth + padding * 2, bodySize * lineHeightScale + padding * 2, radius);
           ctx.fill();
         }
         
@@ -461,7 +483,7 @@ export const renderSlideToCanvas = async (
           let tempX = lx - lineWidth / 2;
           ctx.textAlign = 'left';
           l.parts.forEach((p: any) => {
-            ctx.font = `${p.bold ? '700' : '400'} ${baseFontSize}px "${bodyFont}"`;
+            ctx.font = `${p.bold ? '700' : '400'} ${bodySize}px "${bodyFont}"`;
             ctx.fillStyle = p.color || config.textColor;
             ctx.fillText(p.text, tempX, curY);
             tempX += ctx.measureText(p.text).width;
@@ -469,14 +491,14 @@ export const renderSlideToCanvas = async (
         } else {
           ctx.textAlign = 'left';
           let tempX = lx;
-          l.parts.forEach(p => {
-             ctx.font = `${p.bold ? '700' : '400'} ${baseFontSize}px "${bodyFont}"`;
+          l.parts.forEach((p: any) => {
+             ctx.font = `${p.bold ? '700' : '400'} ${bodySize}px "${bodyFont}"`;
              ctx.fillStyle = p.color || config.textColor;
              ctx.fillText(p.text, tempX, curY);
              tempX += ctx.measureText(p.text).width;
           });
         }
-        curY += baseFontSize * lineHeightScale;
+        curY += bodySize * lineHeightScale;
       });
     } else if (slide.paragraphs && slide.paragraphs.length > 0) {
       // Group paragraphs by verticalOffset

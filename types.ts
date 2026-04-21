@@ -56,6 +56,8 @@ export interface DesignConfig {
   format: SlideFormat;
   customColor: string;
   textColor: string;
+  accentColor: string;
+  secondaryAccentColor: string;
   bgImageUrl: string | null;
   bgMode: 'single' | 'multiple';
   overlayType: OverlayType;
@@ -108,7 +110,7 @@ export interface SlideParagraph {
 }
 
 export interface SlideData {
-  id: number;
+  id: number | string;
   text: string;
   paragraphs?: SlideParagraph[];
   bgImageUrl?: string | null;
@@ -116,4 +118,5 @@ export interface SlideData {
   overlayIntensity?: number; // 0-100
   overlayColor?: string;
   overlayOffset?: number; // 0-100
+  infoType?: 'hook' | 'list' | 'steps' | 'cards' | 'comparison' | 'cta';
 }
