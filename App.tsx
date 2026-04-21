@@ -68,6 +68,7 @@ const App: React.FC = () => {
     firstSubtitleOpacity: 70,
     firstSubtitleFont: BODY_FONTS[0],
     textBackground: { enabledFirst: false, enabledMiddle: false, color: '#000000', opacity: 50, borderRadius: 20, padding: 30 },
+    notesSlide1Style: 'note',
     finalSlide: { enabled: true, textBefore: 'Забирай подарок', codeWord: 'АКСЕЛЕРАТОР', textAfter: 'в директ', blogDescription: '', codeWordY: 50, avatarY: 85, codeWordVerticalOffset: 35 }
   });
 
@@ -102,7 +103,8 @@ const App: React.FC = () => {
           overlayType: existing?.overlayType || OverlayType.FULL,
           overlayIntensity: existing?.overlayIntensity ?? 45,
           overlayColor: existing?.overlayColor ?? '#000000',
-          overlayOffset: existing?.overlayOffset ?? 50
+          overlayOffset: existing?.overlayOffset ?? 50,
+          notesPosition: existing?.notesPosition ?? { x: 50, y: 50 }
         };
       });
     });
@@ -128,7 +130,7 @@ const App: React.FC = () => {
     setConfig(c => ({
       ...c, 
       format: f,
-      alignment: f === SlideFormat.POINT_EXPLAIN ? Alignment.LEFT : c.alignment
+      alignment: (f === SlideFormat.POINT_EXPLAIN || f === SlideFormat.NOTES) ? Alignment.LEFT : c.alignment
     }));
   };
 
@@ -419,41 +421,92 @@ const App: React.FC = () => {
               <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
                 <h2 className="text-xl font-bold uppercase tracking-tight">ШАГ 4: шрифты и верстка</h2>
                 
-                {/* Plate 1: Выбираем шрифт */}
-                <div className="border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-900/30">
-                  <button 
-                    onClick={() => setActiveStep4Plate(activeStep4Plate === 'font' ? null : 'font')}
-                    className="w-full p-4 flex items-center justify-between hover:bg-zinc-900 transition-all"
-                  >
-                    <span className="text-xs font-black uppercase tracking-widest">Выбираем шрифт</span>
-                    <ChevronRight size={16} className={`transition-transform duration-300 ${activeStep4Plate === 'font' ? 'rotate-90' : ''}`} />
-                  </button>
-                  {activeStep4Plate === 'font' && (
-                    <div className="p-4 pt-0 space-y-6 animate-in slide-in-from-top-2 duration-300">
-                      <div className="grid grid-cols-2 gap-2">
-                        {FONT_PAIRS.map(p => (
-                          <button key={p.name} onClick={() => setConfig(c => ({...c, fontPair: p}))} className={`p-4 rounded-xl border text-left flex flex-col h-20 transition-all ${config.fontPair.name === p.name ? 'border-white bg-white/10' : 'border-zinc-800 bg-zinc-900'}`}>
-                            <span className="text-[11px] font-bold mb-1" style={{fontFamily: p.header}}>{p.name}</span>
-                            <span className="text-[9px] text-zinc-600 opacity-60 mt-auto">АБВГД abcde</span>
-                          </button>
-                        ))}
-                      </div>
-                      {config.fontPair.isCustom && (
-                        <div className="p-4 bg-zinc-900 rounded-xl border border-zinc-800 grid grid-cols-2 gap-4">
-                           <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Заголовок</span><select value={config.fontPair.header} onChange={e => setConfig(c => ({...c, fontPair: {...c.fontPair, header: e.target.value}}))} className="w-full bg-black border border-zinc-800 p-2 rounded-lg text-[10px] text-white">{HEADER_FONTS.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
-                           <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Текст</span><select value={config.fontPair.body} onChange={e => setConfig(c => ({...c, fontPair: {...c.fontPair, body: e.target.value}}))} className="w-full bg-black border border-zinc-800 p-2 rounded-lg text-[10px] text-white">{BODY_FONTS.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
+                {config.format === SlideFormat.NOTES && (
+                  <div className="space-y-4">
+                    <div className="border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-900/30">
+                      <button 
+                        onClick={() => setActiveStep4Plate(activeStep4Plate === 'notes_slide1' ? null : 'notes_slide1')}
+                        className="w-full p-4 flex items-center justify-between hover:bg-zinc-900 transition-all text-[#D4A017]"
+                      >
+                        <span className="text-xs font-black uppercase tracking-widest">Стиль 1-го слайда</span>
+                        <ChevronRight size={16} className={`transition-transform duration-300 ${activeStep4Plate === 'notes_slide1' ? 'rotate-90' : ''}`} />
+                      </button>
+                      {activeStep4Plate === 'notes_slide1' && (
+                        <div className="p-4 pt-0 grid grid-cols-2 gap-2 animate-in slide-in-from-top-2 duration-300">
+                          <button onClick={() => setConfig(c => ({...c, notesSlide1Style: 'note'}))} className={`p-3 rounded-xl border text-[10px] font-bold transition-all ${config.notesSlide1Style === 'note' ? 'bg-white text-black' : 'border-zinc-800 text-zinc-500'}`}>Как заметка</button>
+                          <button onClick={() => setConfig(c => ({...c, notesSlide1Style: 'point'}))} className={`p-3 rounded-xl border text-[10px] font-bold transition-all ${config.notesSlide1Style === 'point' ? 'bg-white text-black' : 'border-zinc-800 text-zinc-500'}`}>Пункт + Пояснение</button>
                         </div>
                       )}
-                      <div className="space-y-2">
-                        <span className="text-[9px] text-zinc-500 uppercase font-bold">Цвет текста</span>
-                        <div className="flex gap-2">
-                          <input type="color" value={config.textColor} onChange={e => setConfig(c => ({...c, textColor: e.target.value}))} className="w-10 h-10 bg-black border border-zinc-800 rounded cursor-pointer" />
-                          <input type="text" value={config.textColor} onChange={e => setConfig(c => ({...c, textColor: e.target.value}))} className="flex-1 bg-black border border-zinc-800 p-2 rounded text-[10px] font-mono text-white" placeholder="#FFFFFF" />
+                    </div>
+
+                    <div className="border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-900/30">
+                      <button 
+                        onClick={() => setActiveStep4Plate(activeStep4Plate === 'notes_pos' ? null : 'notes_pos')}
+                        className="w-full p-4 flex items-center justify-between hover:bg-zinc-900 transition-all text-[#D4A017]"
+                      >
+                        <span className="text-xs font-black uppercase tracking-widest">Расположение заметок</span>
+                        <ChevronRight size={16} className={`transition-transform duration-300 ${activeStep4Plate === 'notes_pos' ? 'rotate-90' : ''}`} />
+                      </button>
+                      {activeStep4Plate === 'notes_pos' && (
+                        <div className="p-4 pt-0 space-y-4 animate-in slide-in-from-top-2 duration-300 max-h-[300px] overflow-y-auto custom-scrollbar">
+                          {slides.map(slide => (
+                            <div key={slide.id} className="p-3 bg-black/40 rounded-xl border border-zinc-800 space-y-3">
+                              <span className="text-[10px] font-bold text-zinc-500 uppercase">Слайд {slide.id}</span>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <div className="flex justify-between"><span className="text-[8px] text-zinc-600 uppercase">X: {slide.notesPosition?.x}%</span></div>
+                                  <input type="range" min="0" max="100" value={slide.notesPosition?.x ?? 50} onChange={e => setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, notesPosition: { ...s.notesPosition!, x: parseInt(e.target.value) } } : s))} className="w-full accent-[#D4A017]" />
+                                </div>
+                                <div className="space-y-1">
+                                  <div className="flex justify-between"><span className="text-[8px] text-zinc-600 uppercase">Y: {slide.notesPosition?.y}%</span></div>
+                                  <input type="range" min="0" max="100" value={slide.notesPosition?.y ?? 50} onChange={e => setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, notesPosition: { ...s.notesPosition!, y: parseInt(e.target.value) } } : s))} className="w-full accent-[#D4A017]" />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Plate 1: Выбираем шрифт */}
+                {config.format !== SlideFormat.NOTES && (
+                  <div className="border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-900/30">
+                    <button 
+                      onClick={() => setActiveStep4Plate(activeStep4Plate === 'font' ? null : 'font')}
+                      className="w-full p-4 flex items-center justify-between hover:bg-zinc-900 transition-all"
+                    >
+                      <span className="text-xs font-black uppercase tracking-widest">Выбираем шрифт</span>
+                      <ChevronRight size={16} className={`transition-transform duration-300 ${activeStep4Plate === 'font' ? 'rotate-90' : ''}`} />
+                    </button>
+                    {activeStep4Plate === 'font' && (
+                      <div className="p-4 pt-0 space-y-6 animate-in slide-in-from-top-2 duration-300">
+                        <div className="grid grid-cols-2 gap-2">
+                          {FONT_PAIRS.map(p => (
+                            <button key={p.name} onClick={() => setConfig(c => ({...c, fontPair: p}))} className={`p-4 rounded-xl border text-left flex flex-col h-20 transition-all ${config.fontPair.name === p.name ? 'border-white bg-white/10' : 'border-zinc-800 bg-zinc-900'}`}>
+                              <span className="text-[11px] font-bold mb-1" style={{fontFamily: p.header}}>{p.name}</span>
+                              <span className="text-[9px] text-zinc-600 opacity-60 mt-auto">АБВГД abcde</span>
+                            </button>
+                          ))}
+                        </div>
+                        {config.fontPair.isCustom && (
+                          <div className="p-4 bg-zinc-900 rounded-xl border border-zinc-800 grid grid-cols-2 gap-4">
+                             <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Заголовок</span><select value={config.fontPair.header} onChange={e => setConfig(c => ({...c, fontPair: {...c.fontPair, header: e.target.value}}))} className="w-full bg-black border border-zinc-800 p-2 rounded-lg text-[10px] text-white">{HEADER_FONTS.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
+                             <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Текст</span><select value={config.fontPair.body} onChange={e => setConfig(c => ({...c, fontPair: {...c.fontPair, body: e.target.value}}))} className="w-full bg-black border border-zinc-800 p-2 rounded-lg text-[10px] text-white">{BODY_FONTS.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
+                          </div>
+                        )}
+                        <div className="space-y-2">
+                          <span className="text-[9px] text-zinc-500 uppercase font-bold">Цвет текста</span>
+                          <div className="flex gap-2">
+                            <input type="color" value={config.textColor} onChange={e => setConfig(c => ({...c, textColor: e.target.value}))} className="w-10 h-10 bg-black border border-zinc-800 rounded cursor-pointer" />
+                            <input type="text" value={config.textColor} onChange={e => setConfig(c => ({...c, textColor: e.target.value}))} className="flex-1 bg-black border border-zinc-800 p-2 rounded text-[10px] font-mono text-white" placeholder="#FFFFFF" />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Plate 2: Размер текста */}
                 <div className="border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-900/30">
@@ -466,61 +519,75 @@ const App: React.FC = () => {
                   </button>
                   {activeStep4Plate === 'size' && (
                     <div className="p-4 pt-0 space-y-6 animate-in slide-in-from-top-2 duration-300">
-                      <div className="p-4 bg-zinc-900/50 rounded-2xl border border-zinc-800 space-y-4">
-                        <h3 className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Первый слайд</h3>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                            <span className="text-[9px] text-zinc-500 uppercase font-bold">Заголовок</span>
-                            <input type="range" min="30" max="150" value={config.fontSizes.first} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, first: parseInt(e.target.value)}}))} className="w-full accent-white" />
+                      {config.format !== SlideFormat.NOTES ? (
+                        <>
+                          <div className="p-4 bg-zinc-900/50 rounded-2xl border border-zinc-800 space-y-4">
+                            <h3 className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Первый слайд</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1">
+                                <span className="text-[9px] text-zinc-500 uppercase font-bold">Заголовок</span>
+                                <input type="range" min="30" max="150" value={config.fontSizes.first} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, first: parseInt(e.target.value)}}))} className="w-full accent-white" />
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-[9px] text-zinc-500 uppercase font-bold">Подзаголовок</span>
+                                <input type="range" min="20" max="100" value={config.fontSizes.firstSubtitleSize} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, firstSubtitleSize: parseInt(e.target.value)}}))} className="w-full accent-white" />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1">
+                                <span className="text-[9px] text-zinc-500 uppercase font-bold">Шрифт подзаг.</span>
+                                <select value={config.firstSubtitleFont} onChange={e => setConfig(c => ({...c, firstSubtitleFont: e.target.value}))} className="w-full bg-black border border-zinc-800 p-2 rounded-lg text-[10px] text-white">
+                                  {BODY_FONTS.map(f => <option key={f} value={f}>{f}</option>)}
+                                </select>
+                              </div>
+                              <div className="space-y-1">
+                                <div className="flex justify-between"><span className="text-[9px] text-zinc-500 uppercase font-bold">Яркость</span><span className="text-[9px] text-zinc-300 font-bold">{config.firstSubtitleOpacity}%</span></div>
+                                <input type="range" min="10" max="100" value={config.firstSubtitleOpacity} onChange={e => setConfig(c => ({...c, firstSubtitleOpacity: parseInt(e.target.value)}))} className="w-full accent-white" />
+                              </div>
+                            </div>
                           </div>
-                          <div className="space-y-1">
-                            <span className="text-[9px] text-zinc-500 uppercase font-bold">Подзаголовок</span>
-                            <input type="range" min="20" max="100" value={config.fontSizes.firstSubtitleSize} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, firstSubtitleSize: parseInt(e.target.value)}}))} className="w-full accent-white" />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                            <span className="text-[9px] text-zinc-500 uppercase font-bold">Шрифт подзаг.</span>
-                            <select value={config.firstSubtitleFont} onChange={e => setConfig(c => ({...c, firstSubtitleFont: e.target.value}))} className="w-full bg-black border border-zinc-800 p-2 rounded-lg text-[10px] text-white">
-                              {BODY_FONTS.map(f => <option key={f} value={f}>{f}</option>)}
-                            </select>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex justify-between"><span className="text-[9px] text-zinc-500 uppercase font-bold">Яркость</span><span className="text-[9px] text-zinc-300 font-bold">{config.firstSubtitleOpacity}%</span></div>
-                            <input type="range" min="10" max="100" value={config.firstSubtitleOpacity} onChange={e => setConfig(c => ({...c, firstSubtitleOpacity: parseInt(e.target.value)}))} className="w-full accent-white" />
-                          </div>
-                        </div>
-                      </div>
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Слайды 2+</span><input type="range" min="30" max="100" value={config.fontSizes.middle} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, middle: parseInt(e.target.value)}}))} className="w-full accent-white" /></div>
-                        <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Межстрочный</span><input type="range" min="100" max="300" value={config.fontSizes.lineHeight * 100} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, lineHeight: parseInt(e.target.value) / 100}}))} className="w-full accent-white" /></div>
-                      </div>
-                      
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-3 gap-2">
-                          {[Alignment.LEFT, Alignment.CENTER, Alignment.JUSTIFY].map(a => (
-                            <button key={a} onClick={() => setConfig(c => ({...c, alignment: a}))} className={`p-2 rounded-lg border flex items-center justify-center ${config.alignment === a ? 'bg-white text-black' : 'border-zinc-800'}`}>
-                              {a === Alignment.LEFT ? <AlignLeft size={16}/> : a === Alignment.CENTER ? <AlignCenter size={16}/> : <AlignJustify size={16}/>}
-                            </button>
-                          ))}
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Слайды 2+</span><input type="range" min="30" max="100" value={config.fontSizes.middle} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, middle: parseInt(e.target.value)}}))} className="w-full accent-white" /></div>
+                            <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Межстрочный</span><input type="range" min="100" max="300" value={config.fontSizes.lineHeight * 100} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, lineHeight: parseInt(e.target.value) / 100}}))} className="w-full accent-white" /></div>
+                          </div>
+                          
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-3 gap-2">
+                              {[Alignment.LEFT, Alignment.CENTER, Alignment.JUSTIFY].map(a => (
+                                <button key={a} onClick={() => setConfig(c => ({...c, alignment: a}))} className={`p-2 rounded-lg border flex items-center justify-center ${config.alignment === a ? 'bg-white text-black' : 'border-zinc-800'}`}>
+                                  {a === Alignment.LEFT ? <AlignLeft size={16}/> : a === Alignment.CENTER ? <AlignCenter size={16}/> : <AlignJustify size={16}/>}
+                                </button>
+                              ))}
+                            </div>
+                            <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Смещение (Общее)</span><input type="range" min="20" max="80" value={config.fontSizes.verticalOffset} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, verticalOffset: parseInt(e.target.value)}}))} className="w-full accent-white" /></div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-2">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Масштаб заметок</span>
+                            <span className="text-[10px] text-white font-bold">{config.fontSizes.middle}%</span>
+                          </div>
+                          <input type="range" min="40" max="140" value={config.fontSizes.middle} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, middle: parseInt(e.target.value)}}))} className="w-full accent-[#D4A017]" />
+                          <p className="text-[8px] text-zinc-500 mt-2 uppercase">Изменение размера шрифта пропорционально меняет и размер всей заметки</p>
                         </div>
-                        <div className="space-y-1"><span className="text-[9px] text-zinc-500 uppercase font-bold">Смещение (Общее)</span><input type="range" min="20" max="80" value={config.fontSizes.verticalOffset} onChange={e => setConfig(c => ({...c, fontSizes: {...c.fontSizes, verticalOffset: parseInt(e.target.value)}}))} className="w-full accent-white" /></div>
-                      </div>
+                      )}
                     </div>
                   )}
                 </div>
 
                 {/* Plate 3: Подложка под текст */}
-                <div className="border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-900/30">
-                  <button 
-                    onClick={() => setActiveStep4Plate(activeStep4Plate === 'bg' ? null : 'bg')}
-                    className="w-full p-4 flex items-center justify-between hover:bg-zinc-900 transition-all"
-                  >
-                    <span className="text-xs font-black uppercase tracking-widest">Подложка под текст</span>
-                    <ChevronRight size={16} className={`transition-transform duration-300 ${activeStep4Plate === 'bg' ? 'rotate-90' : ''}`} />
-                  </button>
-                  {activeStep4Plate === 'bg' && (
+                {config.format !== SlideFormat.NOTES && (
+                  <div className="border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-900/30">
+                    <button 
+                      onClick={() => setActiveStep4Plate(activeStep4Plate === 'bg' ? null : 'bg')}
+                      className="w-full p-4 flex items-center justify-between hover:bg-zinc-900 transition-all"
+                    >
+                      <span className="text-xs font-black uppercase tracking-widest">Подложка под текст</span>
+                      <ChevronRight size={16} className={`transition-transform duration-300 ${activeStep4Plate === 'bg' ? 'rotate-90' : ''}`} />
+                    </button>
+                    {activeStep4Plate === 'bg' && (
                     <div className="p-4 pt-0 space-y-6 animate-in slide-in-from-top-2 duration-300">
                       <div className="grid grid-cols-2 gap-2">
                         <button onClick={() => setConfig(c => ({...c, textBackground: {...c.textBackground, enabledFirst: !c.textBackground.enabledFirst}}))} className={`px-4 py-2.5 rounded-xl text-[9px] font-black border ${config.textBackground.enabledFirst ? 'bg-white text-black border-white' : 'bg-zinc-900 text-zinc-500 border-zinc-800'}`}>1 СЛАЙД: {config.textBackground.enabledFirst ? 'ВКЛ' : 'ВЫКЛ'}</button>
@@ -569,8 +636,9 @@ const App: React.FC = () => {
                     </div>
                   )}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+          )}
 
             {step === 5 && (
               <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">

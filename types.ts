@@ -30,7 +30,8 @@ export enum SlideFormat {
   PLAN = 'Пост-план',
   LIST = 'Пост-список',
   POINT_EXPLAIN = 'Пункт + пояснение',
-  PERSONAL = 'Личный пост'
+  PERSONAL = 'Личный пост',
+  NOTES = 'Заметки'
 }
 
 export enum OverlayType {
@@ -101,6 +102,7 @@ export interface DesignConfig {
     borderRadius: number; // 0-100
     padding: number; // 0-100
   };
+  notesSlide1Style: 'point' | 'note';
   finalSlide: FinalSlideConfig;
 }
 
@@ -118,5 +120,9 @@ export interface SlideData {
   overlayIntensity?: number; // 0-100
   overlayColor?: string;
   overlayOffset?: number; // 0-100
-  infoType?: 'hook' | 'list' | 'steps' | 'cards' | 'comparison' | 'cta';
+  notesPosition?: {
+    x: number; // 0-100
+    y: number; // 0-100
+  };
+  infoType?: 'hook' | 'list' | 'steps' | 'cards' | 'comparison' | 'cta' | 'cover' | 'tools' | 'metric' | 'flow' | 'checklist' | 'manifesto' | 'table';
 }

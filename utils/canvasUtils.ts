@@ -130,6 +130,126 @@ const getWrappedLines = (
   return { lines: allLines, totalHeight };
 };
 
+const renderNotesSlide = async (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  safeMargin: number,
+  config: DesignConfig,
+  slide: SlideData
+) => {
+  // Use config.fontSizes.middle (30-100) to derive a scale (0.4 - 1.4ish)
+  // Default was 1/1.5 (~0.66)
+  const baseScale = config.fontSizes.middle / 100;
+  const scale = baseScale * 1.0; 
+  const iOSAccent = "#D4A017";
+  const iOSBodyColor = "#000000";
+  
+  // 1. Configuration & Scaling
+  const noteWidth = (width * 0.95) * scale;
+  const borderRadius = 50 * scale;
+  const topBarH = 110 * scale;
+  const contentPadding = 65 * scale;
+  const contentWidth = noteWidth - contentPadding * 2;
+  
+  const bodyFontSize = 44 * scale;
+  const dateFontSize = 24 * scale;
+  const titleFontSize = 34 * scale;
+
+  // iOS Font Stack
+  const fontStack = '-apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+
+  // 2. Pre-calculate height and layouts
+  let estimatedContentHeight = topBarH + 50 * scale; 
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+
+  const lines = slide.text.split('\n');
+  const layouts: any[] = [];
+
+  lines.forEach((line) => {
+    ctx.font = `400 ${bodyFontSize}px ${fontStack}`;
+    const layout = getWrappedLines(ctx, line, contentWidth, bodyFontSize, fontStack, 1.35);
+    layouts.push({ layout, fontSize: bodyFontSize });
+    estimatedContentHeight += layout.totalHeight + (line.trim().length === 0 ? 20 * scale : 10 * scale);
+  });
+
+  const noteHeight = estimatedContentHeight + contentPadding;
+
+  // 3. Positioning
+  const pos = slide.notesPosition ?? { x: 50, y: 50 };
+  const noteX = (width - noteWidth) * (pos.x / 100);
+  const noteY = (height - noteHeight) * (pos.y / 100);
+
+  // 4. Draw Card
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.15)';
+  ctx.shadowBlur = 60 * scale;
+  ctx.shadowOffsetY = 20 * scale;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath();
+  ctx.roundRect(noteX, noteY, noteWidth, noteHeight, borderRadius);
+  ctx.fill();
+  ctx.restore();
+
+  // 5. Icons
+  const iconY = noteY + 60 * scale;
+  ctx.strokeStyle = iOSAccent;
+  ctx.lineWidth = 5 * scale;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(noteX + 45 * scale, noteY + 45 * scale);
+  ctx.lineTo(noteX + 28 * scale, noteY + 62 * scale);
+  ctx.lineTo(noteX + 45 * scale, noteY + 79 * scale);
+  ctx.stroke();
+
+  ctx.fillStyle = iOSAccent;
+  ctx.font = `400 ${titleFontSize}px ${fontStack}`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('Заметки', noteX + 65 * scale, noteY + 62 * scale);
+
+  const shareX = noteX + noteWidth - 65 * scale;
+  ctx.lineWidth = 3 * scale;
+  ctx.strokeRect(shareX - 16 * scale, iconY - 14 * scale, 32 * scale, 32 * scale);
+  ctx.beginPath();
+  ctx.moveTo(shareX, iconY - 14 * scale); ctx.lineTo(shareX, iconY - 32 * scale);
+  ctx.moveTo(shareX - 10 * scale, iconY - 24 * scale); ctx.lineTo(shareX, iconY - 32 * scale); ctx.lineTo(shareX + 10 * scale, iconY - 24 * scale);
+  ctx.stroke();
+
+  const moreX = shareX - 80 * scale;
+  ctx.beginPath(); ctx.arc(moreX, iconY, 22 * scale, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = iOSAccent;
+  ctx.beginPath(); ctx.arc(moreX - 10 * scale, iconY, 3.5 * scale, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(moreX, iconY, 3.5 * scale, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(moreX + 10 * scale, iconY, 3.5 * scale, 0, Math.PI * 2); ctx.fill();
+
+  // 6. Date
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+  const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#8E8E93';
+  ctx.font = `400 ${dateFontSize}px ${fontStack}`;
+  ctx.fillText(`${dateStr} в ${timeStr}`, noteX + noteWidth / 2, noteY + topBarH + 5 * scale);
+
+  // 7. Text
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = iOSBodyColor;
+  let currentY = noteY + topBarH + 75 * scale;
+
+  layouts.forEach((item) => {
+    ctx.font = `400 ${item.fontSize}px ${fontStack}`;
+    item.layout.lines.forEach((l: any) => {
+      ctx.fillText(l.parts.map((p: any) => p.text).join(''), noteX + contentPadding, currentY);
+      currentY += item.fontSize * 1.35;
+    });
+    currentY += 10 * scale;
+  });
+};
+
 export const renderSlideToCanvas = async (
   canvas: HTMLCanvasElement,
   slide: SlideData | null,
@@ -218,7 +338,15 @@ export const renderSlideToCanvas = async (
   if (isFinal) {
     await renderFinalSlide(ctx, width, height, safeMargin, config);
   } else if (slide) {
-    const isFirst = slide.id === 1;
+    const isFirst = slide.id === 1 || slide.id === '1';
+    
+    // Notes format has special handling
+    if (config.format === SlideFormat.NOTES && !(isFirst && config.notesSlide1Style === 'point')) {
+      await renderNotesSlide(ctx, width, height, safeMargin, config, slide);
+      return; 
+    }
+
+    // Standard rendering for other formats OR first slide of Notes in point style
     let textToRender = slide.text;
     let headerText = '';
 
@@ -237,7 +365,9 @@ export const renderSlideToCanvas = async (
     const textStartYLimit = safeMargin + topAvoidance;
     const textEndYLimit = height - safeMargin - bottomAvoidance;
 
-    if (config.format === SlideFormat.POINT_EXPLAIN) {
+    const isPointExplain = config.format === SlideFormat.POINT_EXPLAIN || (config.format === SlideFormat.NOTES && isFirst && config.notesSlide1Style === 'point');
+
+    if (isPointExplain) {
       const firstDelimiter = slide.text.search(/[.!\n]/);
       if (firstDelimiter !== -1) {
         let firstPart = slide.text.substring(0, firstDelimiter + 1).trim();
@@ -379,7 +509,7 @@ export const renderSlideToCanvas = async (
           });
         });
       });
-    } else if (config.format === SlideFormat.POINT_EXPLAIN && headerText) {
+    } else if (isPointExplain && headerText) {
       // POINT_EXPLAIN format logic remains mostly same but we could apply background
       let finalHeadLayout: any = null;
       let finalBodyLayout: any = null;
@@ -634,12 +764,12 @@ export const renderSlideToCanvas = async (
         if (line.isParagraphEnd && config.format === SlideFormat.PLAN) y += baseFontSize * (lineHeightScale - 1);
       });
     }
-  }
 
-  if (!isFinal) {
-    await drawBranding(ctx, width, height, safeMargin, config);
-    if (config.numbering.enabled) {
-      drawNumbering(ctx, width, height, safeMargin, `${slide?.id}/${totalSlides}`, config);
+    if (!isFinal) {
+      await drawBranding(ctx, width, height, safeMargin, config);
+      if (config.numbering.enabled) {
+        drawNumbering(ctx, width, height, safeMargin, `${slide?.id}/${totalSlides}`, config);
+      }
     }
   }
 
