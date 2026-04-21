@@ -241,9 +241,14 @@ const renderNotesSlide = async (
   let currentY = noteY + topBarH + 75 * scale;
 
   layouts.forEach((item) => {
-    ctx.font = `400 ${item.fontSize}px ${fontStack}`;
     item.layout.lines.forEach((l: any) => {
-      ctx.fillText(l.parts.map((p: any) => p.text).join(''), noteX + contentPadding, currentY);
+      let x = noteX + contentPadding;
+      l.parts.forEach((p: any) => {
+        ctx.font = `${p.bold ? '700' : '400'} ${item.fontSize}px ${fontStack}`;
+        ctx.fillStyle = p.color || iOSBodyColor;
+        ctx.fillText(p.text, x, currentY);
+        x += ctx.measureText(p.text).width;
+      });
       currentY += item.fontSize * 1.35;
     });
     currentY += 10 * scale;
@@ -343,11 +348,9 @@ export const renderSlideToCanvas = async (
     // Notes format has special handling
     if (config.format === SlideFormat.NOTES && !(isFirst && config.notesSlide1Style === 'point')) {
       await renderNotesSlide(ctx, width, height, safeMargin, config, slide);
-      return; 
-    }
-
-    // Standard rendering for other formats OR first slide of Notes in point style
-    let textToRender = slide.text;
+    } else {
+      // Standard rendering for other formats OR first slide of Notes in point style
+      let textToRender = slide.text;
     let headerText = '';
 
     // Branding Avoidance Logic
@@ -764,14 +767,15 @@ export const renderSlideToCanvas = async (
         if (line.isParagraphEnd && config.format === SlideFormat.PLAN) y += baseFontSize * (lineHeightScale - 1);
       });
     }
+  }
 
-    if (!isFinal) {
-      await drawBranding(ctx, width, height, safeMargin, config);
-      if (config.numbering.enabled) {
-        drawNumbering(ctx, width, height, safeMargin, `${slide?.id}/${totalSlides}`, config);
-      }
+  if (!isFinal && slide) {
+    await drawBranding(ctx, width, height, safeMargin, config);
+    if (config.numbering.enabled) {
+      drawNumbering(ctx, width, height, safeMargin, `${slide.id}/${totalSlides}`, config);
     }
   }
+}
 
   return true;
 };
