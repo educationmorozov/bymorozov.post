@@ -74,6 +74,7 @@ export interface DesignConfig {
   };
   nickname: string;
   avatarUrl: string | null;
+  brandingEnabled: boolean;
   nickPosition: NickPosition;
   numbering: {
     enabled: boolean;

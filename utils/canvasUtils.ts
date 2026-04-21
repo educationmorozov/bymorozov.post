@@ -770,7 +770,9 @@ export const renderSlideToCanvas = async (
   }
 
   if (!isFinal && slide) {
-    await drawBranding(ctx, width, height, safeMargin, config);
+    if (config.brandingEnabled) {
+      await drawBranding(ctx, width, height, safeMargin, config);
+    }
     if (config.numbering.enabled) {
       drawNumbering(ctx, width, height, safeMargin, `${slide.id}/${totalSlides}`, config);
     }

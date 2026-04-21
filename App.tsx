@@ -61,6 +61,7 @@ const App: React.FC = () => {
     fontPair: FONT_PAIRS[0],
     nickname: '',
     avatarUrl: null,
+    brandingEnabled: true,
     nickPosition: NickPosition.BOTTOM_LEFT,
     numbering: { enabled: true, position: 'bottom-right' },
     sizes: { first: AspectRatio.PORTRAIT, middle: AspectRatio.PORTRAIT, last: AspectRatio.PORTRAIT },
@@ -657,6 +658,10 @@ const App: React.FC = () => {
                   {[NickPosition.TOP_LEFT, NickPosition.TOP_CENTER, NickPosition.TOP_RIGHT, NickPosition.BOTTOM_LEFT, NickPosition.BOTTOM_CENTER, NickPosition.BOTTOM_RIGHT].map(pos => (
                     <button key={pos} onClick={() => setConfig(c => ({...c, nickPosition: pos}))} className={`p-2 border rounded-lg text-[9px] h-10 transition-all ${config.nickPosition === pos ? 'border-white bg-white text-black font-bold' : 'border-zinc-800 bg-zinc-900'}`}>{pos}</button>
                   ))}
+                </div>
+                <div className="flex items-center justify-between p-4 bg-zinc-900 rounded-xl border border-zinc-800">
+                  <span className="text-[10px] text-zinc-400 font-bold uppercase">Отображать никнейм</span>
+                  <button onClick={() => setConfig(c => ({...c, brandingEnabled: !c.brandingEnabled}))} className={`px-4 py-1.5 rounded-full text-[9px] font-black transition-all ${config.brandingEnabled ? 'bg-white text-black' : 'bg-zinc-900 text-zinc-500 border border-zinc-800'}`}>{config.brandingEnabled ? 'ВКЛ' : 'ВЫКЛ'}</button>
                 </div>
                 <div className="flex items-center justify-between p-4 bg-zinc-900 rounded-xl border border-zinc-800">
                   <span className="text-[10px] text-zinc-400 font-bold uppercase">Нумерация страниц</span>
