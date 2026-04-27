@@ -237,7 +237,7 @@ const renderNotesSlide = async (
   // 7. Text
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.fillStyle = iOSBodyColor;
+  ctx.fillStyle = config.textColor;
   let currentY = noteY + topBarH + 75 * scale;
 
   layouts.forEach((item) => {
@@ -245,7 +245,7 @@ const renderNotesSlide = async (
       let x = noteX + contentPadding;
       l.parts.forEach((p: any) => {
         ctx.font = `${p.bold ? '700' : '400'} ${item.fontSize}px ${fontStack}`;
-        ctx.fillStyle = p.color || iOSBodyColor;
+        ctx.fillStyle = p.color || config.textColor;
         ctx.fillText(p.text, x, currentY);
         x += ctx.measureText(p.text).width;
       });
@@ -549,12 +549,11 @@ export const renderSlideToCanvas = async (
       ctx.textBaseline = 'top';
       finalHeadLayout.lines.forEach(l => {
         let lx = config.alignment === Alignment.CENTER ? width / 2 : safeMargin;
-        const lineText = l.parts.map((p: any) => p.text).join('');
-        
-        ctx.font = `700 ${headSize}px "${headerFont}"`;
-        ctx.fillStyle = config.textColor;
-
-        const lineWidth = ctx.measureText(lineText).width;
+        let lineWidth = 0;
+        l.parts.forEach((p: any) => {
+          ctx.font = `700 ${headSize}px "${headerFont}"`;
+          lineWidth += ctx.measureText(p.text).width;
+        });
 
         if (isBgEnabled) {
           const bg = config.textBackground;
@@ -574,13 +573,23 @@ export const renderSlideToCanvas = async (
         }
         
         if (config.alignment === Alignment.CENTER) {
-          ctx.textAlign = 'center';
-          ctx.fillStyle = config.textColor;
-          ctx.fillText(lineText, lx, curY);
+          let tempX = lx - lineWidth / 2;
+          ctx.textAlign = 'left';
+          l.parts.forEach((p: any) => {
+            ctx.font = `700 ${headSize}px "${headerFont}"`;
+            ctx.fillStyle = p.color || config.textColor;
+            ctx.fillText(p.text, tempX, curY);
+            tempX += ctx.measureText(p.text).width;
+          });
         } else {
           ctx.textAlign = 'left';
-          ctx.fillStyle = config.textColor;
-          ctx.fillText(lineText, lx, curY);
+          let tempX = lx;
+          l.parts.forEach((p: any) => {
+            ctx.font = `700 ${headSize}px "${headerFont}"`;
+            ctx.fillStyle = p.color || config.textColor;
+            ctx.fillText(p.text, tempX, curY);
+            tempX += ctx.measureText(p.text).width;
+          });
         }
         curY += headSize * 1.25;
       });
