@@ -94,7 +94,7 @@ const getWrappedLines = (
     let currentLineWidth = 0;
 
     parts.forEach((part) => {
-      ctx.font = `${part.bold ? '700' : '400'} ${fontSize}px "${fontFamily}"`;
+      ctx.font = `${part.bold ? '700' : '400'} ${fontSize}px ${fontFamily.includes(',') ? fontFamily : `"${fontFamily}"`}`;
       const words = part.text.split(' ');
 
       words.forEach((word, idx) => {
@@ -146,7 +146,9 @@ const renderNotesSlide = async (
   const iOSBodyColor = "#000000";
   
   // 1. Configuration & Scaling
-  const noteWidth = (width * 0.95) * scale;
+  // Cap dimensions to canvas size
+  const maxAllowedWidth = width * 0.92;
+  const noteWidth = Math.min(maxAllowedWidth, (width * 0.95) * scale);
   const borderRadius = 50 * scale;
   const topBarH = 110 * scale;
   const contentPadding = 65 * scale;
@@ -164,28 +166,29 @@ const renderNotesSlide = async (
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
 
-  const lines = slide.text.split('\n');
-  const layouts: any[] = [];
-
-  lines.forEach((line) => {
-    ctx.font = `400 ${bodyFontSize}px ${fontStack}`;
-    const layout = getWrappedLines(ctx, line, contentWidth, bodyFontSize, fontStack, 1.35);
-    layouts.push({ layout, fontSize: bodyFontSize });
-    estimatedContentHeight += layout.totalHeight + (line.trim().length === 0 ? 20 * scale : 10 * scale);
+  // Explicitly split by paragraphs to handle spacing better
+  const paragraphs = slide.text.split('\n');
+  const layouts: { layout: any, spacing: number }[] = [];
+  
+  paragraphs.forEach((p, idx) => {
+    const layout = getWrappedLines(ctx, p, contentWidth, bodyFontSize, fontStack, 1.35);
+    const spacing = (p.trim().length === 0 ? 20 * scale : 10 * scale);
+    layouts.push({ layout, spacing });
+    estimatedContentHeight += layout.totalHeight + (idx < paragraphs.length - 1 ? spacing : 0);
   });
 
   const noteHeight = estimatedContentHeight + contentPadding;
 
   // 3. Positioning
   const pos = slide.notesPosition ?? { x: 50, y: 50 };
-  const noteX = (width - noteWidth) * (pos.x / 100);
-  const noteY = (height - noteHeight) * (pos.y / 100);
+  const noteX = Math.max(0, Math.min(width - noteWidth, (width - noteWidth) * (pos.x / 100)));
+  const noteY = Math.max(0, Math.min(height - noteHeight, (height - noteHeight) * (pos.y / 100)));
 
   // 4. Draw Card
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.15)';
-  ctx.shadowBlur = 60 * scale;
-  ctx.shadowOffsetY = 20 * scale;
+  ctx.shadowColor = 'rgba(0,0,0,0.1)';
+  ctx.shadowBlur = 40 * scale;
+  ctx.shadowOffsetY = 15 * scale;
   ctx.fillStyle = '#FFFFFF';
   ctx.beginPath();
   ctx.roundRect(noteX, noteY, noteWidth, noteHeight, borderRadius);
@@ -194,21 +197,24 @@ const renderNotesSlide = async (
 
   // 5. Icons
   const iconY = noteY + 60 * scale;
-  ctx.strokeStyle = iOSAccent;
-  ctx.lineWidth = 5 * scale;
+  const accentColor = "#D4A017";
+  ctx.strokeStyle = accentColor;
+  ctx.lineWidth = 4 * scale;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
+  
+  // Back arrow
   ctx.beginPath();
   ctx.moveTo(noteX + 45 * scale, noteY + 45 * scale);
-  ctx.lineTo(noteX + 28 * scale, noteY + 62 * scale);
-  ctx.lineTo(noteX + 45 * scale, noteY + 79 * scale);
+  ctx.lineTo(noteX + 30 * scale, noteY + 60 * scale);
+  ctx.lineTo(noteX + 45 * scale, noteY + 75 * scale);
   ctx.stroke();
 
-  ctx.fillStyle = iOSAccent;
-  ctx.font = `400 ${titleFontSize}px ${fontStack}`;
+  ctx.fillStyle = accentColor;
+  ctx.font = `600 ${titleFontSize}px ${fontStack}`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText('Заметки', noteX + 65 * scale, noteY + 62 * scale);
+  ctx.fillText('Заметки', noteX + 65 * scale, noteY + 60 * scale);
 
   const shareX = noteX + noteWidth - 65 * scale;
   ctx.lineWidth = 3 * scale;
@@ -219,11 +225,11 @@ const renderNotesSlide = async (
   ctx.stroke();
 
   const moreX = shareX - 80 * scale;
-  ctx.beginPath(); ctx.arc(moreX, iconY, 22 * scale, 0, Math.PI * 2); ctx.stroke();
-  ctx.fillStyle = iOSAccent;
-  ctx.beginPath(); ctx.arc(moreX - 10 * scale, iconY, 3.5 * scale, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(moreX, iconY, 3.5 * scale, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(moreX + 10 * scale, iconY, 3.5 * scale, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(moreX, iconY, 20 * scale, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = accentColor;
+  ctx.beginPath(); ctx.arc(moreX - 9 * scale, iconY, 3 * scale, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(moreX, iconY, 3 * scale, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(moreX + 9 * scale, iconY, 3 * scale, 0, Math.PI * 2); ctx.fill();
 
   // 6. Date
   const now = new Date();
@@ -237,21 +243,20 @@ const renderNotesSlide = async (
   // 7. Text
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.fillStyle = config.textColor;
   let currentY = noteY + topBarH + 75 * scale;
 
   layouts.forEach((item) => {
     item.layout.lines.forEach((l: any) => {
       let x = noteX + contentPadding;
       l.parts.forEach((p: any) => {
-        ctx.font = `${p.bold ? '700' : '400'} ${item.fontSize}px ${fontStack}`;
-        ctx.fillStyle = p.color || config.textColor;
+        ctx.font = `${p.bold ? '700' : '400'} ${bodyFontSize}px ${fontStack}`;
+        ctx.fillStyle = p.color || iOSBodyColor;
         ctx.fillText(p.text, x, currentY);
         x += ctx.measureText(p.text).width;
       });
-      currentY += item.fontSize * 1.35;
+      currentY += bodyFontSize * 1.35;
     });
-    currentY += 10 * scale;
+    currentY += item.spacing;
   });
 };
 
